@@ -32,6 +32,18 @@
         <p id="lock-subtitle" class="lock-subtitle">请输入主密码解锁</p>
         <p id="lock-insecure" class="lock-alert hidden">当前为 file:// 打开，加密不可用。请运行 start-server.bat 后访问 http://localhost:8080</p>
 
+        <div id="lock-import-panel" class="lock-import-panel hidden">
+          <p class="lock-hint">选择此前导出的 <code>.json</code> 备份文件，并输入该备份的主密码。</p>
+          <label class="lock-field">
+            <span class="lock-label">备份主密码</span>
+            <input type="password" id="lock-import-password" placeholder="备份文件的主密码" autocomplete="current-password" />
+          </label>
+          <label id="lock-import-btn" class="lock-submit file-btn" tabindex="0">
+            选择并导入加密备份
+            <input type="file" id="lock-import-backup" accept=".json,.txt" hidden />
+          </label>
+        </div>
+
         <form id="lock-form" class="lock-form">
           <label class="lock-field">
             <span class="lock-label">主密码</span>
@@ -317,7 +329,7 @@
 
         <div class="settings-block">
           <h3>项目标签</h3>
-          <p class="hint">用于快速录入与时间线筛选，可自行增删。删除后已有记录仍保留原标签。</p>
+          <p class="hint">用于快速录入与时间线筛选，需自行添加；初始无默认标签。删除后已有记录仍保留原标签。</p>
           <ul id="project-tag-list" class="project-tag-list"></ul>
           <div class="project-tag-add">
             <input type="text" id="new-project-tag" placeholder="新标签名称" />

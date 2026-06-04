@@ -99,36 +99,44 @@ const App = (() => {
     await CryptoVault.saveEncrypted(password, data);
   }
 
-  async function unlock(pwd, isSetup) {
-    if (isSetup) {
-      data = DEFAULT_DATA();
-      await CryptoVault.saveEncrypted(pwd, data);
-    } else {
-      try {
-        data = await CryptoVault.loadEncrypted(pwd);
-        if (!data) throw new Error('无数据');
-        data.logs = data.logs || [];
-        data.schedules = data.schedules || [];
-        data.scheduleCompletions = data.scheduleCompletions || [];
-        data.meetings = data.meetings || [];
-        data.keyProjects = data.keyProjects || [];
-        migrateKeyProjectIds();
-        data.dailySummaries = data.dailySummaries || {};
-        data.weeklySummaries = data.weeklySummaries || {};
-        data.settings = data.settings || DEFAULT_DATA().settings;
-        if (ensureProjectTags()) {
-          await CryptoVault.saveEncrypted(pwd, data);
-        }
-        if (ensureScheduleColors()) {
-          await CryptoVault.saveEncrypted(pwd, data);
-        }
-        if (ensureScheduleWeekIds()) {
-          await CryptoVault.saveEncrypted(pwd, data);
-        }
-      } catch {
-        throw new Error('密码错误或数据已损坏');
-      }
+  async function loadAndMigrateData(pwd) {
+    data = await CryptoVault.loadEncrypted(pwd);
+    if (!data) throw new Error('无数据');
+    data.logs = data.logs || [];
+    data.schedules = data.schedules || [];
+    data.scheduleCompletions = data.scheduleCompletions || [];
+    data.meetings = data.meetings || [];
+    data.keyProjects = data.keyProjects || [];
+    migrateKeyProjectIds();
+    data.dailySummaries = data.dailySummaries || {};
+    data.weeklySummaries = data.weeklySummaries || {};
+    data.settings = data.settings || DEFAULT_DATA().settings;
+    let needsSave = false;
+    if (normalizeProjectTags()) needsSave = true;
+    if (ensureScheduleColors()) needsSave = true;
+    if (ensureScheduleWeekIds()) needsSave = true;
+    if (needsSave) await CryptoVault.saveEncrypted(pwd, data);
+    return data;
+  }
+
+  async function unlock(pwd) {
+    if (!CryptoVault.isInitialized()) {
+      throw new Error('暂无本地数据，请先导入加密备份');
     }
+    try {
+      await loadAndMigrateData(pwd);
+    } catch {
+      throw new Error('密码错误或数据已损坏');
+    }
+    password = pwd;
+    $('#lock-screen').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    initUI();
+    resetIdleTimer();
+  }
+
+  async function enterAppAfterImport(pwd) {
+    await loadAndMigrateData(pwd);
     password = pwd;
     $('#lock-screen').classList.add('hidden');
     $('#app').classList.remove('hidden');
@@ -138,7 +146,7 @@ const App = (() => {
 
   function initUI() {
     initScheduleColorPicker();
-    ensureProjectTags();
+    normalizeProjectTags();
     refreshProjectSelects();
     renderKeyProjectPickers();
     setScheduleWeekDefaults();
@@ -190,8 +198,12 @@ const App = (() => {
     $('#entry-content').focus();
   }
 
-  function ensureProjectTags() {
-    if (!data?.settings) return false;
+  function normalizeProjectTags() {
+    if (!data) return false;
+    if (!data.settings) {
+      data.settings = { weekStartDay: 'monday', projectTags: [] };
+      return true;
+    }
     if (!Array.isArray(data.settings.projectTags)) {
       data.settings.projectTags = [];
       return true;
@@ -200,7 +212,8 @@ const App = (() => {
   }
 
   function getProjectTags() {
-    return data?.settings?.projectTags || [];
+    if (!Array.isArray(data?.settings?.projectTags)) return [];
+    return data.settings.projectTags;
   }
 
   function getOrphanProjectTags() {
@@ -268,6 +281,7 @@ const App = (() => {
       alert('该标签已存在');
       return;
     }
+    normalizeProjectTags();
     data.settings.projectTags.push(name);
     await persist();
     $('#new-project-tag').value = '';
@@ -559,6 +573,11 @@ const App = (() => {
       e.preventDefault();
       await handleLockSubmit();
     });
+
+    $('#lock-import-backup').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      await handleLockImport(file);
+    });
   }
 
   function bindEvents() {
@@ -822,37 +841,61 @@ const App = (() => {
   async function handleLockSubmit() {
     const submitBtn = $('#lock-submit');
     const pwd = $('#lock-password').value;
-    const confirm = $('#lock-password-confirm');
-    const isSetup = !CryptoVault.isInitialized();
     $('#lock-error').classList.add('hidden');
+
+    if (!CryptoVault.isInitialized()) {
+      showLockError('暂无本地数据，请先导入加密备份');
+      return;
+    }
 
     if (!window.isSecureContext || !window.crypto?.subtle) {
       showLockError('请通过 http://localhost:8080 访问（运行 start-server.bat）');
       return;
     }
 
-    if (isSetup) {
-      if (pwd.length < 6) {
-        showLockError('密码至少 6 位');
-        return;
-      }
-      if (pwd !== confirm.value) {
-        showLockError('两次密码不一致');
-        return;
-      }
-    }
-
     submitBtn.disabled = true;
     const prevLabel = submitBtn.textContent;
-    submitBtn.textContent = isSetup ? '正在创建…' : '正在解锁…';
+    submitBtn.textContent = '正在解锁…';
 
     try {
-      await unlock(pwd, isSetup);
+      await unlock(pwd);
     } catch (err) {
       showLockError(err.message || '解锁失败，请检查密码或改用 localhost 访问');
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = prevLabel;
+    }
+  }
+
+  async function handleLockImport(file) {
+    if (!file) return;
+    const pwd = $('#lock-import-password').value;
+    $('#lock-error').classList.add('hidden');
+
+    if (!window.isSecureContext || !window.crypto?.subtle) {
+      showLockError('请通过 http://localhost:8080 访问（运行 start-server.bat）');
+      return;
+    }
+    if (!pwd) {
+      showLockError('请输入备份文件的主密码');
+      return;
+    }
+
+    const btn = $('#lock-import-btn');
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = '正在导入…';
+
+    try {
+      const text = await file.text();
+      await CryptoVault.importBackup(pwd, text);
+      await enterAppAfterImport(pwd);
+    } catch {
+      showLockError('导入失败：密码错误或文件无效');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      $('#lock-import-backup').value = '';
     }
   }
 
@@ -1859,12 +1902,7 @@ const App = (() => {
     try {
       const text = await file.text();
       await CryptoVault.importBackup(pwd, text);
-      data = await CryptoVault.loadEncrypted(pwd);
-      data.meetings = data.meetings || [];
-      data.keyProjects = data.keyProjects || [];
-      migrateKeyProjectIds();
-      data.settings = data.settings || DEFAULT_DATA().settings;
-      ensureProjectTags();
+      await loadAndMigrateData(pwd);
       password = pwd;
       renderAll();
       refreshProjectSelects();
@@ -1896,14 +1934,21 @@ const App = (() => {
   }
 
   function setupLockScreen() {
-    const isSetup = !CryptoVault.isInitialized();
-    $('#lock-subtitle').textContent = isSetup ? '首次使用，请设置主密码（至少 6 位）' : '请输入主密码解锁';
-    $('#lock-submit').textContent = isSetup ? '创建并进入' : '解锁';
-    $('#lock-confirm-wrap').classList.toggle('hidden', !isSetup);
-    $('#lock-hint').classList.toggle('hidden', !isSetup);
+    const hasData = CryptoVault.isInitialized();
+    $('#lock-subtitle').textContent = hasData
+      ? '请输入主密码解锁'
+      : '暂无本地数据，请导入加密备份';
+    $('#lock-form').classList.toggle('hidden', !hasData);
+    $('#lock-import-panel').classList.toggle('hidden', hasData);
+    $('#lock-confirm-wrap').classList.add('hidden');
+    $('#lock-hint').classList.toggle('hidden', !hasData);
+    $('#lock-password').value = '';
+    $('#lock-import-password').value = '';
+    $('#lock-import-backup').value = '';
     const insecure = !window.isSecureContext || !window.crypto?.subtle;
     $('#lock-insecure').classList.toggle('hidden', !insecure);
     $('#lock-submit').disabled = insecure;
+    $('#lock-import-btn').disabled = insecure;
   }
 
   function downloadFile(name, content, mime) {

@@ -613,6 +613,22 @@ body:has(#app:not(.hidden)) {
   font-weight: 500;
 }
 
+.stat-filter {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.stat-filter:hover {
+  background: var(--apple-surface-secondary, #f5f5f7);
+}
+
+.stat-filter--active {
+  border-color: currentColor;
+  font-weight: 600;
+}
+
 .stat-done {
   color: var(--type-done);
 }

@@ -612,6 +612,15 @@ const App = (() => {
 
     $('#timeline-goto-today').addEventListener('click', scrollTimelineToToday);
 
+    $('#timeline-stats').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-filter-type]');
+      if (!chip) return;
+      const type = chip.dataset.filterType;
+      const select = $('#filter-type');
+      select.value = select.value === type ? '' : type;
+      renderTimeline();
+    });
+
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
     $('#filter-tag').addEventListener('change', renderTimeline);
@@ -1202,11 +1211,14 @@ const App = (() => {
       doing: logs.filter((l) => l.type === 'doing').length,
       plan: logs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
-    $('#timeline-stats').innerHTML = `
-      <span class="stat-item stat-done">已完成 ${stats.done}</span>
-      <span class="stat-item stat-doing">进行中 ${stats.doing}</span>
-      <span class="stat-item stat-plan">计划 ${stats.plan}</span>
-    `;
+    const statChip = (type, label, count) => {
+      const active = typeFilter === type ? ' stat-filter--active' : '';
+      return `<button type="button" class="stat-item stat-filter stat-${type}${active}" data-filter-type="${type}">${label} ${count}</button>`;
+    };
+    $('#timeline-stats').innerHTML =
+      statChip('done', '已完成', stats.done) +
+      statChip('doing', '进行中', stats.doing) +
+      statChip('plan', '计划', stats.plan);
 
     const byDate = new Map();
     for (const log of logs) {
@@ -1545,9 +1557,10 @@ const App = (() => {
   function recurrenceLabel(s) {
     let label = '';
     if (s.recurrenceType === 'daily') label = '每天';
-    else if (s.recurrenceType === 'weekly') {
+    else if (s.recurrenceType === 'weekly' || s.recurrenceType === 'biweekly') {
       const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      label = `每周${names[s.dayOfWeek ?? 3]}`;
+      const prefix = s.recurrenceType === 'biweekly' ? '每双周' : '每周';
+      label = `${prefix}${names[s.dayOfWeek ?? 3]}`;
     } else label = `每月 ${s.dayOfMonth ?? 1} 日`;
     const weekPart = scheduleWeekRangeLabel(s);
     return weekPart ? `${label} · ${weekPart}` : label;
@@ -1576,7 +1589,7 @@ const App = (() => {
       startDate: weekRange.startDate,
       endDate: weekRange.endDate,
     };
-    if (type === 'weekly') payload.dayOfWeek = parseInt($('#sch-dow').value, 10);
+    if (type === 'weekly' || type === 'biweekly') payload.dayOfWeek = parseInt($('#sch-dow').value, 10);
     if (type === 'monthly') payload.dayOfMonth = parseInt($('#sch-dom').value, 10);
 
     if (editId) {
@@ -1852,7 +1865,7 @@ const App = (() => {
 
   function updateScheduleFormVisibility() {
     const type = $('#sch-recurrence').value;
-    $('#sch-dow').classList.toggle('hidden', type !== 'weekly');
+    $('#sch-dow').classList.toggle('hidden', type !== 'weekly' && type !== 'biweekly');
     $('#sch-dom').classList.toggle('hidden', type !== 'monthly');
   }
 

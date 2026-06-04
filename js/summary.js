@@ -436,6 +436,24 @@ const ScheduleLogic = (() => {
 
     }
 
+    if (type === 'biweekly') {
+      const dow = date.getDay();
+      const target = schedule.dayOfWeek ?? 3;
+      if (dow !== target) return false;
+
+      const anchorWeekId =
+        schedule.startWeekId ||
+        (schedule.startDate
+          ? DateUtils.getISOWeekInfo(DateUtils.parseDateKey(schedule.startDate)).weekId
+          : null);
+      if (!anchorWeekId) return false;
+
+      const { weekId } = DateUtils.getISOWeekInfo(date);
+      const offset = DateUtils.weeksBetweenWeekIds(anchorWeekId, weekId);
+      if (offset === null || offset < 0) return false;
+      return offset % 2 === 0;
+    }
+
     if (type === 'monthly') {
 
       return date.getDate() === (schedule.dayOfMonth ?? 1);

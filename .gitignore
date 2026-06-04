@@ -1,0 +1,15 @@
+# 个人加密备份（推送时用 git add -f，见 GitHub上传指南.md）
+encrypted-backups/
+backup/
+worklog-backup-*.json
+*.backup.json
+
+# 本地打包分发文件
+*.zip
+
+# 系统与编辑器
+Thumbs.db
+.DS_Store
+*.log
+.vscode/
+.idea/

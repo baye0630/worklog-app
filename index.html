@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>工作日志与总结</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <!-- 解锁 / 首次设置 -->
+  <div id="lock-screen" class="lock-screen">
+    <div class="lock-bg" aria-hidden="true">
+      <div class="lock-bg-orb lock-bg-orb--1"></div>
+      <div class="lock-bg-orb lock-bg-orb--2"></div>
+      <div class="lock-bg-orb lock-bg-orb--3"></div>
+    </div>
+    <div class="lock-wrap">
+      <header class="lock-header">
+        <div class="lock-logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="6" width="32" height="36" rx="6" stroke="currentColor" stroke-width="2"/>
+            <path d="M16 6V12C16 15.3137 18.6863 18 22 18H26C29.3137 18 32 15.3137 32 12V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="16" y1="26" x2="32" y2="26" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="16" y1="32" x2="26" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h1 class="lock-title">工作日志</h1>
+        <p class="lock-tagline">记录 · 总结 · 加密存储</p>
+      </header>
+
+      <div class="lock-card">
+        <p id="lock-subtitle" class="lock-subtitle">请输入主密码解锁</p>
+        <p id="lock-insecure" class="lock-alert hidden">当前为 file:// 打开，加密不可用。请运行 start-server.bat 后访问 http://localhost:8080</p>
+
+        <form id="lock-form" class="lock-form">
+          <label class="lock-field">
+            <span class="lock-label">主密码</span>
+            <input type="password" id="lock-password" placeholder="输入密码" autocomplete="current-password" required />
+          </label>
+          <label class="lock-field hidden" id="lock-confirm-wrap">
+            <span class="lock-label">确认密码</span>
+            <input type="password" id="lock-password-confirm" placeholder="再次输入密码" autocomplete="new-password" />
+          </label>
+          <p id="lock-hint" class="lock-hint hidden">忘记密码将无法恢复数据，请定期导出加密备份。</p>
+          <button type="submit" id="lock-submit" class="lock-submit">解锁</button>
+        </form>
+
+        <p id="lock-error" class="lock-error hidden"></p>
+      </div>
+
+      <footer class="lock-footer">
+        <span class="lock-footer-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L4 5v6c0 5.25 3.4 10.15 8 11.35C16.6 21.15 20 16.25 20 11V5l-8-3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          本地 AES 加密 · 数据不上传
+        </span>
+      </footer>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <span>工作日志</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="timeline">时间线</button>
+        <button class="nav-item" data-view="summary">总结</button>
+        <button class="nav-item" data-view="calendar">月历</button>
+        <button class="nav-item" data-view="schedules">固定日程</button>
+        <button class="nav-item" data-view="meetings">会议纪要</button>
+        <button class="nav-item" data-view="key-projects">关键项目</button>
+        <button class="nav-item" data-view="settings">设置</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" id="btn-open-entry" class="btn-primary btn-open-entry">快速录入</button>
+        <button id="btn-lock" class="btn-ghost sidebar-lock">锁定</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- 时间线 -->
+      <section id="view-timeline" class="view active">
+        <h2 class="view-hero-title">时间线</h2>
+        <p class="view-hero-subtitle">随时记录，上下滑动按日回顾，含每周固定日程。</p>
+        <header class="view-header timeline-header">
+          <p class="timeline-header-hint">最新在上，向下滚动查看更早记录</p>
+          <div id="timeline-stats" class="stats-bar"></div>
+          <button type="button" id="timeline-goto-today" class="btn-secondary">回到今天</button>
+        </header>
+        <div class="filter-bar">
+          <label>筛选类型</label>
+          <select id="filter-type">
+            <option value="">全部</option>
+            <option value="done">已完成</option>
+            <option value="doing">进行中</option>
+            <option value="plan">计划</option>
+          </select>
+          <label>项目</label>
+          <select id="filter-project">
+            <option value="">全部</option>
+          </select>
+          <label>标签</label>
+          <select id="filter-tag">
+            <option value="">全部</option>
+            <option value="琐碎任务">琐碎任务</option>
+            <option value="exclude-trivial">非琐碎任务</option>
+          </select>
+        </div>
+        <div id="timeline-axis" class="timeline-axis"></div>
+        <p id="timeline-empty" class="empty hidden">暂无记录，点击左侧「快速录入」添加吧。</p>
+      </section>
+
+      <!-- 总结 -->
+      <section id="view-summary" class="view hidden">
+        <h2 class="view-hero-title">总结</h2>
+        <p class="view-hero-subtitle">金字塔结构，一键生成日报与周报。</p>
+        <header class="view-header">
+          <div class="tab-bar">
+            <button class="tab active" data-summary="daily">每日总结</button>
+            <button class="tab" data-summary="weekly">每周总结</button>
+          </div>
+          <div class="date-nav">
+            <button id="summary-prev" class="btn-icon">‹</button>
+            <input type="date" id="summary-date" />
+            <button id="summary-next" class="btn-icon">›</button>
+          </div>
+          <div class="action-bar">
+            <span id="summary-save-status" class="summary-save-status"></span>
+            <button id="btn-save-summary" class="btn-primary">保存修改</button>
+            <button id="btn-regenerate" class="btn-secondary">重新生成</button>
+            <button id="btn-copy-summary" class="btn-secondary">复制 Markdown</button>
+            <button id="btn-export-summary" class="btn-secondary">导出 .md</button>
+          </div>
+        </header>
+        <div class="summary-panel">
+          <div class="summary-view-bar tab-bar">
+            <button type="button" class="tab active" data-md-view="preview">预览</button>
+            <button type="button" class="tab" data-md-view="source">源文档</button>
+          </div>
+          <p id="summary-edit-hint" class="summary-edit-hint hidden">在源文档中编辑后，点击「保存修改」或按 Ctrl+S 保存定稿。</p>
+          <div id="summary-preview" class="summary-preview"></div>
+          <textarea id="summary-editor" class="summary-editor hidden" spellcheck="false"></textarea>
+        </div>
+      </section>
+
+      <!-- 月历 -->
+      <section id="view-calendar" class="view hidden">
+        <h2 class="view-hero-title">月历</h2>
+        <p class="view-hero-subtitle">查看日程标记与每日记录。</p>
+        <header class="view-header">
+          <button id="cal-prev" class="btn-icon">‹</button>
+          <h2 id="cal-title"></h2>
+          <button id="cal-next" class="btn-icon">›</button>
+          <button id="cal-today" class="btn-secondary">今天</button>
+        </header>
+        <div class="cal-layout">
+          <div class="cal-grid-wrap">
+            <div class="cal-weekdays">
+              <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+            </div>
+            <div id="cal-grid" class="cal-grid"></div>
+            <div id="cal-legend" class="cal-legend hidden"></div>
+          </div>
+          <aside id="cal-detail" class="cal-detail">
+            <h3 id="cal-detail-date">选择日期</h3>
+            <div id="cal-schedules"></div>
+            <div id="cal-day-logs"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- 固定日程 -->
+      <section id="view-schedules" class="view hidden">
+        <h2 class="view-hero-title">固定日程</h2>
+        <p class="view-hero-subtitle">不预置任何日程，请自行增删改查。</p>
+
+        <div class="settings-block">
+          <form id="schedule-form" class="schedule-form">
+            <input type="hidden" id="sch-edit-id" />
+            <input type="text" id="sch-title" placeholder="标题，如：刷新看板" required />
+            <input type="text" id="sch-purpose" placeholder="目的（可选），如：保持 dashboard 数据与源库同步" />
+            <textarea id="sch-notes" rows="2" placeholder="备注（可选），如：操作步骤、网址链接等"></textarea>
+            <div class="schedule-color-field">
+              <span class="schedule-color-label">标记颜色</span>
+              <div class="schedule-color-picker" id="sch-color-picker"></div>
+              <input type="hidden" id="sch-color" />
+            </div>
+            <div class="entry-field">
+              <span class="entry-field-label">关键项目（可选，可多选）</span>
+              <div id="sch-key-projects" class="kp-picker"></div>
+            </div>
+            <div class="schedule-week-range">
+              <div class="entry-field">
+                <label class="entry-field-label" for="sch-start-week">开始周</label>
+                <input type="week" id="sch-start-week" />
+              </div>
+              <div class="entry-field">
+                <label class="entry-field-label" for="sch-end-week">结束周</label>
+                <input type="week" id="sch-end-week" />
+              </div>
+            </div>
+            <p class="schedule-week-hint">在所选周范围内，时间线 / 月历会自动显示该固定日程。</p>
+            <div class="schedule-form-row">
+              <select id="sch-recurrence">
+                <option value="daily">每天</option>
+                <option value="weekly" selected>每周</option>
+                <option value="monthly">每月</option>
+              </select>
+              <select id="sch-dow">
+                <option value="1">周一</option>
+                <option value="2">周二</option>
+                <option value="3" selected>周三</option>
+                <option value="4">周四</option>
+                <option value="5">周五</option>
+                <option value="6">周六</option>
+                <option value="0">周日</option>
+              </select>
+              <input type="number" id="sch-dom" class="hidden" min="1" max="31" value="1" placeholder="日" />
+              <label class="checkbox-label"><input type="checkbox" id="sch-reminder" checked /> 写入日报提醒</label>
+              <button type="submit" class="btn-primary" id="sch-submit-btn">添加</button>
+              <button type="button" class="btn-secondary hidden" id="sch-cancel-edit">取消编辑</button>
+            </div>
+          </form>
+          <ul id="schedule-list" class="schedule-list"></ul>
+        </div>
+      </section>
+
+      <!-- 会议纪要 -->
+      <section id="view-meetings" class="view hidden">
+        <h2 class="view-hero-title">会议纪要</h2>
+        <p class="view-hero-subtitle">记录关键会议的主题、时间、地点、参与人与待办。</p>
+
+        <div class="settings-block">
+          <form id="meeting-form" class="meeting-form">
+            <input type="hidden" id="mm-edit-id" />
+            <div class="entry-field">
+              <label class="entry-field-label" for="mm-topic">会议主题</label>
+              <input type="text" id="mm-topic" placeholder="如：Q2 数据复盘会" required />
+            </div>
+            <div class="meeting-form-row">
+              <div class="entry-field">
+                <label class="entry-field-label" for="mm-time">时间</label>
+                <input type="datetime-local" id="mm-time" required />
+              </div>
+              <div class="entry-field">
+                <label class="entry-field-label" for="mm-location">地点</label>
+                <input type="text" id="mm-location" placeholder="如：3 楼会议室 / 腾讯会议" />
+              </div>
+            </div>
+            <div class="entry-field">
+              <label class="entry-field-label" for="mm-participants">参与人</label>
+              <input type="text" id="mm-participants" placeholder="如：张三、李四、王五" />
+            </div>
+            <div class="entry-field">
+              <label class="entry-field-label" for="mm-content">会议内容</label>
+              <textarea id="mm-content" rows="5" placeholder="讨论要点、结论、决策等" required></textarea>
+            </div>
+            <div class="entry-field">
+              <label class="entry-field-label" for="mm-todos">Todo</label>
+              <textarea id="mm-todos" rows="3" placeholder="会后待办，每行一条"></textarea>
+            </div>
+            <div class="meeting-form-actions">
+              <button type="submit" class="btn-primary" id="mm-submit-btn">保存纪要</button>
+              <button type="button" class="btn-secondary hidden" id="mm-cancel-edit">取消编辑</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="meeting-list" class="meeting-list"></div>
+        <p id="meeting-empty" class="empty hidden">暂无会议纪要，请在上方表单添加。</p>
+      </section>
+
+      <!-- 关键项目 -->
+      <section id="view-key-projects" class="view hidden">
+        <h2 class="view-hero-title">关键项目</h2>
+        <p class="view-hero-subtitle">汇总录入任务与固定日程，作为项目主要工作。</p>
+
+        <div class="settings-block">
+          <form id="kp-form" class="kp-form">
+            <input type="hidden" id="kp-edit-id" />
+            <div class="entry-field">
+              <label class="entry-field-label" for="kp-name">项目组名称</label>
+              <input type="text" id="kp-name" placeholder="如：Power BI 看板建设" required />
+            </div>
+            <div class="entry-field">
+              <label class="entry-field-label" for="kp-notes">项目说明（可选）</label>
+              <textarea id="kp-notes" rows="2" placeholder="项目目标、范围等"></textarea>
+            </div>
+            <div class="kp-form-actions">
+              <button type="submit" class="btn-primary" id="kp-submit-btn">创建项目组</button>
+              <button type="button" class="btn-secondary hidden" id="kp-cancel-edit">取消编辑</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="kp-list" class="kp-list"></div>
+        <p id="kp-empty" class="empty hidden">暂无关键项目，请先创建项目组。</p>
+      </section>
+
+      <!-- 设置 -->
+      <section id="view-settings" class="view hidden">
+        <h2 class="view-hero-title">设置</h2>
+        <p class="view-hero-subtitle">密码与数据备份。</p>
+
+        <div class="settings-block">
+          <h3>主密码</h3>
+          <form id="password-form" class="inline-form">
+            <input type="password" id="pwd-old" placeholder="当前密码" required />
+            <input type="password" id="pwd-new" placeholder="新密码" required />
+            <input type="password" id="pwd-new2" placeholder="确认新密码" required />
+            <button type="submit" class="btn-secondary">修改密码</button>
+          </form>
+        </div>
+
+        <div class="settings-block">
+          <h3>项目标签</h3>
+          <p class="hint">用于快速录入与时间线筛选，可自行增删。删除后已有记录仍保留原标签。</p>
+          <ul id="project-tag-list" class="project-tag-list"></ul>
+          <div class="project-tag-add">
+            <input type="text" id="new-project-tag" placeholder="新标签名称" />
+            <button type="button" id="btn-add-project-tag" class="btn-secondary">添加</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>数据备份</h3>
+          <div class="inline-form">
+            <button id="btn-export-backup" class="btn-secondary">导出加密备份</button>
+            <label class="btn-secondary file-btn">
+              导入加密备份
+              <input type="file" id="import-backup" accept=".json,.txt" hidden />
+            </label>
+            <button id="btn-wipe" class="btn-danger">清空全部数据</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 快速录入弹窗 -->
+  <dialog id="entry-dialog" class="entry-dialog">
+    <form id="entry-form" class="entry-dialog-body" method="dialog">
+      <h3>快速录入</h3>
+      <textarea id="entry-content" rows="3" placeholder="记录你在做什么 / 完成了什么…" required></textarea>
+      <select id="entry-type">
+        <option value="done">已完成</option>
+        <option value="doing">进行中</option>
+        <option value="plan">计划（待办）</option>
+      </select>
+      <input type="datetime-local" id="entry-time" />
+      <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
+      <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
+      <select id="entry-project"></select>
+      <label class="entry-field-label" for="entry-purpose">任务目的（可选）</label>
+      <input type="text" id="entry-purpose" placeholder="为什么要做这件事" />
+      <label class="entry-field-label" for="entry-notes">备注（可选）</label>
+      <textarea id="entry-notes" rows="2" placeholder="补充说明、链接等"></textarea>
+      <label class="entry-field-label" for="entry-deadline">DDL 截止日期（可选）</label>
+      <input type="date" id="entry-deadline" />
+      <label class="entry-tag-check checkbox-label">
+        <input type="checkbox" id="entry-tag-trivial" />
+        琐碎任务
+      </label>
+      <div class="entry-field">
+        <span class="entry-field-label">关键项目（可选，可多选）</span>
+        <div id="entry-key-projects" class="kp-picker"></div>
+      </div>
+      <p class="entry-hint">Ctrl + Enter 提交</p>
+      <div class="dialog-actions">
+        <button type="button" id="entry-cancel" class="btn-secondary">取消</button>
+        <button type="submit" class="btn-primary">保存记录</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 编辑弹窗 -->
+  <dialog id="edit-dialog">
+    <form id="edit-form" method="dialog">
+      <h3>编辑记录</h3>
+      <textarea id="edit-content" rows="3" required></textarea>
+      <select id="edit-type">
+        <option value="done">已完成</option>
+        <option value="doing">进行中</option>
+        <option value="plan">计划（待办）</option>
+      </select>
+      <input type="datetime-local" id="edit-time" />
+      <input type="text" id="edit-with-whom" placeholder="是和谁（可选）" />
+      <label class="entry-field-label" for="edit-project">项目标签（可选）</label>
+      <select id="edit-project"></select>
+      <label class="entry-field-label" for="edit-purpose">任务目的（可选）</label>
+      <input type="text" id="edit-purpose" placeholder="为什么要做这件事" />
+      <label class="entry-field-label" for="edit-notes">备注（可选）</label>
+      <textarea id="edit-notes" rows="2" placeholder="补充说明、链接等"></textarea>
+      <label class="entry-field-label" for="edit-deadline">DDL 截止日期（可选）</label>
+      <input type="date" id="edit-deadline" />
+      <label class="entry-tag-check checkbox-label">
+        <input type="checkbox" id="edit-tag-trivial" />
+        琐碎任务
+      </label>
+      <div class="entry-field">
+        <span class="entry-field-label">关键项目（可选，可多选）</span>
+        <div id="edit-key-projects" class="kp-picker"></div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="edit-cancel" class="btn-secondary">取消</button>
+        <button type="submit" class="btn-primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 密码确认弹窗 -->
+  <dialog id="password-prompt-dialog">
+    <form id="password-prompt-form" method="dialog">
+      <h3 id="password-prompt-title">请输入密码</h3>
+      <p id="password-prompt-message" class="password-prompt-message"></p>
+      <input
+        type="password"
+        id="password-prompt-input"
+        autocomplete="current-password"
+        placeholder="主密码"
+        required
+      />
+      <div class="dialog-actions">
+        <button type="button" id="password-prompt-cancel" class="btn-secondary">取消</button>
+        <button type="submit" class="btn-primary">确定</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/date-utils.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/markdown.js"></script>
+  <script src="js/summary.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

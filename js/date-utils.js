@@ -125,6 +125,14 @@ const DateUtils = (() => {
     return getISOWeekInfo(new Date()).weekId;
   }
 
+  /** 两 ISO 周之间的周数差（to − from，不可解析时返回 null） */
+  function weeksBetweenWeekIds(fromWeekId, toWeekId) {
+    const fromStart = weekStartFromWeekId(fromWeekId);
+    const toStart = weekStartFromWeekId(toWeekId);
+    if (!fromStart || !toStart) return null;
+    return Math.round((toStart - fromStart) / 604800000);
+  }
+
   return {
     toDateKey,
     parseDateKey,
@@ -143,5 +151,6 @@ const DateUtils = (() => {
     weekStartFromWeekId,
     weekRangeFromIds,
     currentWeekId,
+    weeksBetweenWeekIds,
   };
 })();

@@ -1502,9 +1502,10 @@ const App = (() => {
   function recurrenceLabel(s) {
     let label = '';
     if (s.recurrenceType === 'daily') label = '每天';
-    else if (s.recurrenceType === 'weekly') {
+    else if (s.recurrenceType === 'weekly' || s.recurrenceType === 'biweekly') {
       const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      label = `每周${names[s.dayOfWeek ?? 3]}`;
+      const prefix = s.recurrenceType === 'biweekly' ? '每双周' : '每周';
+      label = `${prefix}${names[s.dayOfWeek ?? 3]}`;
     } else label = `每月 ${s.dayOfMonth ?? 1} 日`;
     const weekPart = scheduleWeekRangeLabel(s);
     return weekPart ? `${label} · ${weekPart}` : label;
@@ -1533,7 +1534,7 @@ const App = (() => {
       startDate: weekRange.startDate,
       endDate: weekRange.endDate,
     };
-    if (type === 'weekly') payload.dayOfWeek = parseInt($('#sch-dow').value, 10);
+    if (type === 'weekly' || type === 'biweekly') payload.dayOfWeek = parseInt($('#sch-dow').value, 10);
     if (type === 'monthly') payload.dayOfMonth = parseInt($('#sch-dom').value, 10);
 
     if (editId) {
@@ -1809,7 +1810,7 @@ const App = (() => {
 
   function updateScheduleFormVisibility() {
     const type = $('#sch-recurrence').value;
-    $('#sch-dow').classList.toggle('hidden', type !== 'weekly');
+    $('#sch-dow').classList.toggle('hidden', type !== 'weekly' && type !== 'biweekly');
     $('#sch-dom').classList.toggle('hidden', type !== 'monthly');
   }
 

@@ -593,6 +593,15 @@ const App = (() => {
 
     $('#timeline-goto-today').addEventListener('click', scrollTimelineToToday);
 
+    $('#timeline-stats').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-filter-type]');
+      if (!chip) return;
+      const type = chip.dataset.filterType;
+      const select = $('#filter-type');
+      select.value = select.value === type ? '' : type;
+      renderTimeline();
+    });
+
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
     $('#filter-tag').addEventListener('change', renderTimeline);
@@ -1159,11 +1168,14 @@ const App = (() => {
       doing: logs.filter((l) => l.type === 'doing').length,
       plan: logs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
-    $('#timeline-stats').innerHTML = `
-      <span class="stat-item stat-done">已完成 ${stats.done}</span>
-      <span class="stat-item stat-doing">进行中 ${stats.doing}</span>
-      <span class="stat-item stat-plan">计划 ${stats.plan}</span>
-    `;
+    const statChip = (type, label, count) => {
+      const active = typeFilter === type ? ' stat-filter--active' : '';
+      return `<button type="button" class="stat-item stat-filter stat-${type}${active}" data-filter-type="${type}">${label} ${count}</button>`;
+    };
+    $('#timeline-stats').innerHTML =
+      statChip('done', '已完成', stats.done) +
+      statChip('doing', '进行中', stats.doing) +
+      statChip('plan', '计划', stats.plan);
 
     const byDate = new Map();
     for (const log of logs) {

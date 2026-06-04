@@ -22,7 +22,6 @@ const App = (() => {
     '#5e5ce6',
   ];
   const TRIVIAL_TAG = '琐碎任务';
-  const DEFAULT_PROJECT_TAGS = ['数据开发', '数据库运维', '业务分析', '日常沟通', '文档梳理'];
   const DEFAULT_DATA = () => ({
     logs: [],
     schedules: [],
@@ -31,7 +30,7 @@ const App = (() => {
     keyProjects: [],
     dailySummaries: {},
     weeklySummaries: {},
-    settings: { weekStartDay: 'monday', projectTags: [...DEFAULT_PROJECT_TAGS] },
+    settings: { weekStartDay: 'monday', projectTags: [] },
   });
 
   let password = '';
@@ -193,15 +192,15 @@ const App = (() => {
 
   function ensureProjectTags() {
     if (!data?.settings) return false;
-    if (!Array.isArray(data.settings.projectTags) || !data.settings.projectTags.length) {
-      data.settings.projectTags = [...DEFAULT_PROJECT_TAGS];
+    if (!Array.isArray(data.settings.projectTags)) {
+      data.settings.projectTags = [];
       return true;
     }
     return false;
   }
 
   function getProjectTags() {
-    return data?.settings?.projectTags?.length ? data.settings.projectTags : [...DEFAULT_PROJECT_TAGS];
+    return data?.settings?.projectTags || [];
   }
 
   function getOrphanProjectTags() {
@@ -1864,6 +1863,7 @@ const App = (() => {
       data.meetings = data.meetings || [];
       data.keyProjects = data.keyProjects || [];
       migrateKeyProjectIds();
+      data.settings = data.settings || DEFAULT_DATA().settings;
       ensureProjectTags();
       password = pwd;
       renderAll();

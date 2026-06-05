@@ -30,7 +30,7 @@ const App = (() => {
     keyProjects: [],
     dailySummaries: {},
     weeklySummaries: {},
-    settings: { weekStartDay: 'monday', projectTags: [] },
+    settings: { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' },
   });
 
   let password = '';
@@ -152,6 +152,8 @@ const App = (() => {
     setScheduleWeekDefaults();
     setDateInputsToday();
     setMeetingFormTimeDefault();
+    updateQuickEntryShortcutHint();
+    updateTrivialFilterSwitch();
     bindEvents();
     switchView('timeline');
     renderAll();
@@ -191,6 +193,31 @@ const App = (() => {
     setDateInputsToday();
   }
 
+  function isQuickEntryShortcut(e) {
+    return (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l';
+  }
+
+  function canOpenQuickEntry() {
+    if ($('#app').classList.contains('hidden')) return false;
+    if ($('#entry-dialog').open) return false;
+    if ($('#edit-dialog').open) return false;
+    if ($('#password-prompt-dialog').open) return false;
+    return true;
+  }
+
+  function quickEntryShortcutLabel() {
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+    return isMac ? '⌘⇧L' : 'Ctrl+Shift+L';
+  }
+
+  function updateQuickEntryShortcutHint() {
+    const label = quickEntryShortcutLabel();
+    const btn = $('#btn-open-entry');
+    const kbd = $('#btn-open-entry-shortcut');
+    if (kbd) kbd.textContent = label;
+    if (btn) btn.title = `快速录入（${label}）`;
+  }
+
   function openEntryDialog() {
     resetEntryForm();
     refreshProjectSelects();
@@ -201,14 +228,36 @@ const App = (() => {
   function normalizeProjectTags() {
     if (!data) return false;
     if (!data.settings) {
-      data.settings = { weekStartDay: 'monday', projectTags: [] };
+      data.settings = { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' };
       return true;
     }
+    let changed = false;
     if (!Array.isArray(data.settings.projectTags)) {
       data.settings.projectTags = [];
-      return true;
+      changed = true;
     }
-    return false;
+    if (data.settings.timelineView !== 'compact' && data.settings.timelineView !== 'detailed') {
+      data.settings.timelineView = 'detailed';
+      changed = true;
+    }
+    if (!['all', 'only', 'exclude'].includes(data.settings.trivialFilterMode)) {
+      data.settings.trivialFilterMode = 'all';
+      changed = true;
+    }
+    return changed;
+  }
+
+  function getTimelineView() {
+    return data?.settings?.timelineView === 'compact' ? 'compact' : 'detailed';
+  }
+
+  function updateTimelineViewToggle() {
+    const view = getTimelineView();
+    $$('#timeline-view-toggle [data-timeline-view]').forEach((btn) => {
+      const active = btn.dataset.timelineView === view;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
   }
 
   function getProjectTags() {
@@ -595,7 +644,9 @@ const App = (() => {
       await addLog();
     });
 
-    $('#entry-cancel').addEventListener('click', () => $('#entry-dialog').close());
+    const closeEntryDialog = () => $('#entry-dialog').close();
+    $('#entry-cancel').addEventListener('click', closeEntryDialog);
+    $('#entry-close').addEventListener('click', closeEntryDialog);
 
     $('#entry-content').addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key === 'Enter') {
@@ -623,7 +674,18 @@ const App = (() => {
 
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
-    $('#filter-tag').addEventListener('change', renderTimeline);
+    $('#filter-trivial').addEventListener('click', () => cycleTimelineTrivialFilter());
+
+    $('#timeline-view-toggle').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-timeline-view]');
+      if (!btn) return;
+      const view = btn.dataset.timelineView;
+      if (view === getTimelineView()) return;
+      data.settings.timelineView = view;
+      await persist();
+      updateTimelineViewToggle();
+      renderTimeline();
+    });
 
     $('#btn-add-project-tag').addEventListener('click', () => addProjectTagHandler());
     $('#new-project-tag').addEventListener('keydown', (e) => {
@@ -681,6 +743,12 @@ const App = (() => {
     });
 
     document.addEventListener('keydown', (e) => {
+      if (isQuickEntryShortcut(e)) {
+        if (!canOpenQuickEntry()) return;
+        e.preventDefault();
+        openEntryDialog();
+        return;
+      }
       if (currentView !== 'summary') return;
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -1019,9 +1087,41 @@ const App = (() => {
     `;
   }
 
+  function getTimelineTagFilter() {
+    const mode = data?.settings?.trivialFilterMode || 'all';
+    if (mode === 'only') return TRIVIAL_TAG;
+    if (mode === 'exclude') return 'exclude-trivial';
+    return '';
+  }
+
+  function setTimelineTrivialFilter(mode) {
+    if (!data.settings) data.settings = DEFAULT_DATA().settings;
+    data.settings.trivialFilterMode = mode;
+    updateTrivialFilterSwitch();
+  }
+
+  function updateTrivialFilterSwitch() {
+    const btn = $('#filter-trivial');
+    if (!btn) return;
+    const mode = data?.settings?.trivialFilterMode || 'all';
+    const aria = { all: '全部', only: '仅琐碎', exclude: '非琐碎' };
+    btn.dataset.mode = mode;
+    btn.setAttribute('aria-label', `琐碎任务筛选：${aria[mode] || aria.all}`);
+    btn.setAttribute('aria-pressed', mode === 'only' ? 'true' : 'false');
+  }
+
+  async function cycleTimelineTrivialFilter() {
+    const order = ['all', 'only', 'exclude'];
+    const current = data?.settings?.trivialFilterMode || 'all';
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    setTimelineTrivialFilter(next);
+    await persist();
+    renderTimeline();
+  }
+
   function getTimelineFilterContext() {
     const typeFilter = $('#filter-type').value;
-    const tagFilter = $('#filter-tag').value;
+    const tagFilter = getTimelineTagFilter();
     const projectFilter = $('#filter-project').value;
     const showSchedules = !projectFilter && tagFilter !== TRIVIAL_TAG;
     return { typeFilter, tagFilter, projectFilter, showSchedules };
@@ -1195,30 +1295,43 @@ const App = (() => {
     });
   }
 
-  function renderTimeline() {
-    let logs = [...data.logs];
-    const ctx = getTimelineFilterContext();
-    const { typeFilter, projectFilter, tagFilter } = ctx;
-    if (typeFilter) logs = logs.filter((l) => l.type === typeFilter);
-    if (projectFilter) logs = logs.filter((l) => l.project === projectFilter);
-    if (tagFilter === TRIVIAL_TAG) logs = logs.filter((l) => isTrivialLog(l));
-    if (tagFilter === 'exclude-trivial') logs = logs.filter((l) => !isTrivialLog(l));
+  function applyTimelineLogFilters(logs, ctx, { includeTypeFilter = true } = {}) {
+    let filtered = logs;
+    if (includeTypeFilter && ctx.typeFilter) {
+      filtered = filtered.filter((l) => l.type === ctx.typeFilter);
+    }
+    if (ctx.projectFilter) filtered = filtered.filter((l) => l.project === ctx.projectFilter);
+    if (ctx.tagFilter === TRIVIAL_TAG) filtered = filtered.filter((l) => isTrivialLog(l));
+    if (ctx.tagFilter === 'exclude-trivial') filtered = filtered.filter((l) => !isTrivialLog(l));
+    return filtered;
+  }
 
-    const { start, end } = getTimelineSpan(logs, ctx);
-    const scheduleStats = countScheduleStatsInSpan(start, end, ctx);
-    const stats = {
-      done: logs.filter((l) => l.type === 'done').length + scheduleStats.done,
-      doing: logs.filter((l) => l.type === 'doing').length,
-      plan: logs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
+  function computeTimelineHeaderStats(scopeLogs, ctx) {
+    const statsCtx = { ...ctx, typeFilter: '' };
+    const { start, end } = getTimelineSpan(scopeLogs, statsCtx);
+    const scheduleStats = countScheduleStatsInSpan(start, end, statsCtx);
+    return {
+      done: scopeLogs.filter((l) => l.type === 'done').length + scheduleStats.done,
+      doing: scopeLogs.filter((l) => l.type === 'doing').length,
+      plan: scopeLogs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
+  }
+
+  function renderTimeline() {
+    const ctx = getTimelineFilterContext();
+    const { typeFilter } = ctx;
+    const scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
+    const headerStats = computeTimelineHeaderStats(scopeLogs, ctx);
+    let logs = applyTimelineLogFilters([...data.logs], ctx);
+
     const statChip = (type, label, count) => {
       const active = typeFilter === type ? ' stat-filter--active' : '';
       return `<button type="button" class="stat-item stat-filter stat-${type}${active}" data-filter-type="${type}">${label} ${count}</button>`;
     };
     $('#timeline-stats').innerHTML =
-      statChip('done', '已完成', stats.done) +
-      statChip('doing', '进行中', stats.doing) +
-      statChip('plan', '计划', stats.plan);
+      statChip('done', '已完成', headerStats.done) +
+      statChip('doing', '进行中', headerStats.doing) +
+      statChip('plan', '计划', headerStats.plan);
 
     const byDate = new Map();
     for (const log of logs) {
@@ -1228,7 +1341,10 @@ const App = (() => {
 
     const dates = collectTimelineDates(logs, ctx);
     const axis = $('#timeline-axis');
+    axis.className = `timeline-axis timeline-axis--${getTimelineView()}`;
     axis.innerHTML = '';
+    updateTimelineViewToggle();
+    updateTrivialFilterSwitch();
     $('#timeline-empty').classList.toggle('hidden', dates.length > 0);
 
     const today = DateUtils.toDateKey(new Date());
@@ -1302,12 +1418,19 @@ const App = (() => {
     return `<div class="log-tags">${chips.join('')}</div>`;
   }
 
-  function createLogItem(log) {
-    const li = document.createElement('li');
-    li.className = 'log-item';
+  function logActionsHtml() {
+    return `
+      <div class="log-actions">
+        <button type="button" class="btn-secondary btn-edit">编辑</button>
+        <button type="button" class="btn-danger btn-delete">删除</button>
+      </div>
+    `;
+  }
+
+  function logDetailedMainHtml(log) {
     const typeClass = `type-${log.type}`;
     const typeLabel = SummaryEngine.TYPE_LABELS[log.type];
-    li.innerHTML = `
+    return `
       <div class="log-meta">
         <span class="type-badge ${typeClass}">${typeLabel}</span>
         <span>${DateUtils.formatTime(log.timestamp)}</span>
@@ -1318,11 +1441,64 @@ const App = (() => {
       <p class="log-content">${escapeHtml(log.content)}</p>
       ${log.purpose ? `<p class="log-purpose">目的：${escapeHtml(log.purpose)}</p>` : ''}
       ${log.notes ? `<p class="log-notes">备注：${escapeHtml(log.notes)}</p>` : ''}
-      <div class="log-actions">
-        <button class="btn-secondary btn-edit">编辑</button>
-        <button class="btn-secondary btn-delete">删除</button>
-      </div>
     `;
+  }
+
+  function logCompactTagsInlineHtml(log) {
+    const chips = [];
+    if (log.project) {
+      chips.push(`<span class="log-tag log-tag--project-label">${escapeHtml(log.project)}</span>`);
+    }
+    (log.tags || []).forEach((t) => {
+      chips.push(
+        `<span class="log-tag log-tag--${t === TRIVIAL_TAG ? 'trivial' : 'default'}">${escapeHtml(t)}</span>`
+      );
+    });
+    (log.keyProjectIds || []).forEach((id) => {
+      const name = getKeyProjectById(id)?.name;
+      if (name) chips.push(`<span class="log-tag log-tag--key-project">${escapeHtml(name)}</span>`);
+    });
+    if (!chips.length) return '';
+    return `<span class="log-compact-tags">${chips.join('')}</span>`;
+  }
+
+  function logCompactMainHtml(log) {
+    const typeClass = `type-${log.type}`;
+    const typeLabel = SummaryEngine.TYPE_LABELS[log.type];
+    const metaBits = [
+      `<span class="type-badge ${typeClass}">${typeLabel}</span>`,
+      `<span>${DateUtils.formatTime(log.timestamp)}</span>`,
+    ];
+    if (log.withWhom) metaBits.push(`<span>与 ${escapeHtml(log.withWhom)}</span>`);
+    if (log.deadline) {
+      const overdue = isDeadlineOverdue(log.deadline, log.type);
+      metaBits.push(
+        `<span class="log-deadline${overdue ? ' overdue' : ''}">${escapeHtml(formatDeadlineLabel(log.deadline))}${overdue ? ' 已逾期' : ''}</span>`
+      );
+    }
+    const summary = [
+      log.content,
+      log.purpose ? `目的：${log.purpose}` : '',
+      log.notes ? `备注：${log.notes}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    return `
+      <div class="log-compact-line log-compact-meta">
+        <div class="log-compact-meta-start">${metaBits.join('')}</div>
+        ${logCompactTagsInlineHtml(log)}
+      </div>
+      <p class="log-compact-line log-compact-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</p>
+    `;
+  }
+
+  function createLogItem(log) {
+    const view = getTimelineView();
+    const li = document.createElement('li');
+    li.className = `log-item log-item--${view}`;
+    const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
+    li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
     return li;

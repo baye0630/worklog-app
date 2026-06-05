@@ -87,7 +87,10 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button type="button" id="btn-open-entry" class="btn-primary btn-open-entry">快速录入</button>
+        <button type="button" id="btn-open-entry" class="btn-primary btn-open-entry">
+          <span class="btn-open-entry-text">快速录入</span>
+          <kbd id="btn-open-entry-shortcut" class="btn-open-entry-shortcut" aria-hidden="true">Ctrl+Shift+L</kbd>
+        </button>
         <button id="btn-lock" class="btn-ghost sidebar-lock">锁定</button>
       </div>
     </aside>
@@ -114,12 +117,16 @@
           <select id="filter-project">
             <option value="">全部</option>
           </select>
-          <label>标签</label>
-          <select id="filter-tag">
-            <option value="">全部</option>
-            <option value="琐碎任务">琐碎任务</option>
-            <option value="exclude-trivial">非琐碎任务</option>
-          </select>
+          <button type="button" id="filter-trivial" class="filter-trivial-switch" aria-label="琐碎任务筛选：全部">
+            <span class="filter-trivial-label">琐碎任务</span>
+            <span class="ui-switch ui-switch--display" aria-hidden="true">
+              <span class="ui-switch-slider"></span>
+            </span>
+          </button>
+          <div id="timeline-view-toggle" class="segmented-toggle" role="group" aria-label="时间线视图">
+            <button type="button" class="segmented-toggle-btn" data-timeline-view="compact" aria-pressed="false">紧凑</button>
+            <button type="button" class="segmented-toggle-btn active" data-timeline-view="detailed" aria-pressed="true">详细</button>
+          </div>
         </div>
         <div id="timeline-axis" class="timeline-axis"></div>
         <p id="timeline-empty" class="empty hidden">暂无记录，点击左侧「快速录入」添加吧。</p>
@@ -356,7 +363,10 @@
   <!-- 快速录入弹窗 -->
   <dialog id="entry-dialog" class="entry-dialog">
     <form id="entry-form" class="entry-dialog-body" method="dialog">
-      <h3>快速录入</h3>
+      <div class="entry-dialog-header">
+        <h3>快速录入</h3>
+        <button type="button" id="entry-close" class="btn-icon entry-dialog-close" aria-label="关闭">×</button>
+      </div>
       <textarea id="entry-content" rows="3" placeholder="记录你在做什么 / 完成了什么…" required></textarea>
       <select id="entry-type">
         <option value="done">已完成</option>

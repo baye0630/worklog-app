@@ -22,6 +22,7 @@ const App = (() => {
     '#5e5ce6',
   ];
   const TRIVIAL_TAG = '琐碎任务';
+  const MEETING_TIMELINE_TAG = '会议纪要';
   const MAX_MEETING_ATTACHMENT_BYTES = 5 * 1024 * 1024;
   const DEFAULT_DATA = () => ({
     logs: [],
@@ -1029,6 +1030,82 @@ const App = (() => {
     }
   }
 
+  function focusMeetingInList(meetingId) {
+    if (!meetingId) return;
+    expandedMeetingIds.add(meetingId);
+    switchView('meetings');
+    requestAnimationFrame(() => {
+      document.getElementById(`meeting-card-${meetingId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
+  function isMeetingVisibleInTimeline(meetingId, ctx) {
+    return getMeetingTimelineEntries(ctx).some((entry) => entry.meetingId === meetingId);
+  }
+
+  function ensureMeetingVisibleInTimelineFilters(meetingId) {
+    const ctx = getTimelineFilterContext();
+    if (isMeetingVisibleInTimeline(meetingId, ctx)) return;
+
+    $('#filter-type').value = '';
+    if ($('#filter-project').value) $('#filter-project').value = '';
+
+    const tagFilter = getTimelineTagFilter();
+    if (tagFilter === TRIVIAL_TAG) {
+      setTimelineTrivialFilter('all');
+    }
+  }
+
+  function highlightTimelineMeetingItem(meetingId) {
+    const itemEl = document.getElementById(`timeline-meeting-${meetingId}`);
+    if (!itemEl) return;
+    itemEl.classList.remove('log-item--highlight');
+    void itemEl.offsetWidth;
+    itemEl.classList.add('log-item--highlight');
+    itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => itemEl.classList.remove('log-item--highlight'), 2200);
+  }
+
+  function focusMeetingInTimeline(meetingId) {
+    const meeting = data?.meetings?.find((m) => m.id === meetingId);
+    if (!meeting) return;
+
+    ensureMeetingVisibleInTimelineFilters(meetingId);
+    const dateKey = meeting.date || DateUtils.toDateKey(new Date(meeting.timestamp || Date.now()));
+
+    switchView('timeline');
+    requestAnimationFrame(() => {
+      document.getElementById(`timeline-day-${dateKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      requestAnimationFrame(() => highlightTimelineMeetingItem(meetingId));
+    });
+  }
+
+  function meetingToTimelineEntry(meeting) {
+    const ts = meeting.timestamp || Date.now();
+    const date = meeting.date || DateUtils.toDateKey(new Date(ts));
+    return {
+      id: `meeting:${meeting.id}`,
+      meetingId: meeting.id,
+      source: 'meeting',
+      type: 'done',
+      content: meeting.topic || meeting.content?.slice(0, 40) || '未命名会议',
+      withWhom: meeting.participants || '',
+      purpose: meeting.location ? `地点：${meeting.location}` : '',
+      notes: '',
+      tags: [MEETING_TIMELINE_TAG],
+      timestamp: ts,
+      date,
+    };
+  }
+
+  function getMeetingTimelineEntries(ctx) {
+    if (!data?.meetings?.length) return [];
+    if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'plan') return [];
+    if (ctx.projectFilter) return [];
+    if (ctx.tagFilter === TRIVIAL_TAG) return [];
+    return data.meetings.map(meetingToTimelineEntry);
+  }
+
   function renderAll() {
     renderTimeline();
     renderSummary();
@@ -1332,10 +1409,12 @@ const App = (() => {
 
   function computeTimelineHeaderStats(scopeLogs, ctx) {
     const statsCtx = { ...ctx, typeFilter: '' };
-    const { start, end } = getTimelineSpan(scopeLogs, statsCtx);
+    const scopeMeetings = getMeetingTimelineEntries(statsCtx);
+    const combinedScope = [...scopeLogs, ...scopeMeetings];
+    const { start, end } = getTimelineSpan(combinedScope, statsCtx);
     const scheduleStats = countScheduleStatsInSpan(start, end, statsCtx);
     return {
-      done: scopeLogs.filter((l) => l.type === 'done').length + scheduleStats.done,
+      done: scopeLogs.filter((l) => l.type === 'done').length + scopeMeetings.length + scheduleStats.done,
       doing: scopeLogs.filter((l) => l.type === 'doing').length,
       plan: scopeLogs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
@@ -1347,6 +1426,7 @@ const App = (() => {
     const scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
     const headerStats = computeTimelineHeaderStats(scopeLogs, ctx);
     let logs = applyTimelineLogFilters([...data.logs], ctx);
+    logs = [...logs, ...getMeetingTimelineEntries(ctx)];
 
     const statChip = (type, label, count) => {
       const active = typeFilter === type ? ' stat-filter--active' : '';
@@ -1409,7 +1489,10 @@ const App = (() => {
       if (dayLogs.length) {
         const list = document.createElement('ul');
         list.className = 'log-list';
-        dayLogs.forEach((log) => list.appendChild(createLogItem(log)));
+        dayLogs.forEach((log) => {
+          if (log.source === 'meeting') list.appendChild(createMeetingTimelineItem(log));
+          else list.appendChild(createLogItem(log));
+        });
         body.appendChild(list);
       } else if (!daySchedules.length) {
         const empty = document.createElement('p');
@@ -1430,9 +1513,9 @@ const App = (() => {
       chips.push(`<span class="log-tag log-tag--project-label">${escapeHtml(log.project)}</span>`);
     }
     (log.tags || []).forEach((t) => {
-      chips.push(
-        `<span class="log-tag log-tag--${t === TRIVIAL_TAG ? 'trivial' : 'default'}">${escapeHtml(t)}</span>`
-      );
+      const tagClass =
+        t === TRIVIAL_TAG ? 'trivial' : t === MEETING_TIMELINE_TAG ? 'meeting' : 'default';
+      chips.push(`<span class="log-tag log-tag--${tagClass}">${escapeHtml(t)}</span>`);
     });
     (log.keyProjectIds || []).forEach((id) => {
       const name = getKeyProjectById(id)?.name;
@@ -1474,9 +1557,9 @@ const App = (() => {
       chips.push(`<span class="log-tag log-tag--project-label">${escapeHtml(log.project)}</span>`);
     }
     (log.tags || []).forEach((t) => {
-      chips.push(
-        `<span class="log-tag log-tag--${t === TRIVIAL_TAG ? 'trivial' : 'default'}">${escapeHtml(t)}</span>`
-      );
+      const tagClass =
+        t === TRIVIAL_TAG ? 'trivial' : t === MEETING_TIMELINE_TAG ? 'meeting' : 'default';
+      chips.push(`<span class="log-tag log-tag--${tagClass}">${escapeHtml(t)}</span>`);
     });
     (log.keyProjectIds || []).forEach((id) => {
       const name = getKeyProjectById(id)?.name;
@@ -1525,6 +1608,30 @@ const App = (() => {
     li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
+    return li;
+  }
+
+  function meetingTimelineActionsHtml() {
+    return `
+      <div class="log-actions">
+        <button type="button" class="btn-secondary btn-view-meeting">查看纪要</button>
+      </div>
+    `;
+  }
+
+  function createMeetingTimelineItem(entry) {
+    const view = getTimelineView();
+    const li = document.createElement('li');
+    li.className = `log-item log-item--meeting log-item--${view}`;
+    li.id = `timeline-meeting-${entry.meetingId}`;
+    const mainHtml = view === 'compact' ? logCompactMainHtml(entry) : logDetailedMainHtml(entry);
+    li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${meetingTimelineActionsHtml()}`;
+    const openMeeting = () => focusMeetingInList(entry.meetingId);
+    li.querySelector('.log-item-main').addEventListener('click', openMeeting);
+    li.querySelector('.btn-view-meeting').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMeeting();
+    });
     return li;
   }
 
@@ -2153,6 +2260,7 @@ const App = (() => {
     await persist();
     resetMeetingForm();
     renderMeetingList();
+    if (currentView === 'timeline') renderTimeline();
   }
 
   function editMeeting(meeting) {
@@ -2179,6 +2287,7 @@ const App = (() => {
     expandedMeetingIds.delete(id);
     await persist();
     renderMeetingList();
+    if (currentView === 'timeline') renderTimeline();
   }
 
   function countMeetingTodos(todos) {
@@ -2242,6 +2351,7 @@ const App = (() => {
 
       const card = document.createElement('article');
       card.className = `meeting-card ${expanded ? 'meeting-card--expanded' : 'meeting-card--collapsed'}`;
+      card.id = `meeting-card-${meeting.id}`;
       card.innerHTML = `
         <header class="meeting-card-header">
           <button type="button" class="meeting-card-toggle" aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? '折叠纪要' : '展开纪要'}">
@@ -2252,6 +2362,7 @@ const App = (() => {
             <span class="meeting-card-chevron" aria-hidden="true">›</span>
           </button>
           <div class="meeting-card-actions">
+            <button type="button" class="btn-secondary btn-goto-timeline">时间线</button>
             <button type="button" class="btn-secondary btn-edit">编辑</button>
             <button type="button" class="btn-secondary btn-delete">删除</button>
           </div>
@@ -2280,6 +2391,7 @@ const App = (() => {
       `;
 
       card.querySelector('.meeting-card-toggle').addEventListener('click', () => toggleMeetingCard(card, meeting.id));
+      card.querySelector('.btn-goto-timeline').addEventListener('click', () => focusMeetingInTimeline(meeting.id));
       card.querySelector('.btn-edit').addEventListener('click', () => editMeeting(meeting));
       card.querySelector('.btn-delete').addEventListener('click', () => deleteMeeting(meeting.id));
       bindMeetingAttachmentActions(card, meeting);

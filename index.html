@@ -282,6 +282,19 @@
               <label class="entry-field-label" for="mm-todos">Todo</label>
               <textarea id="mm-todos" rows="3" placeholder="会后待办，每行一条"></textarea>
             </div>
+            <div class="entry-field">
+              <span class="entry-field-label">附件（截图、文件）</span>
+              <div class="mm-attachments">
+                <ul id="mm-attachments-list" class="mm-attachments-list"></ul>
+                <div class="mm-attachments-actions">
+                  <label class="btn-secondary file-btn">
+                    选择文件
+                    <input type="file" id="mm-attachment-input" multiple hidden />
+                  </label>
+                  <span class="hint mm-attachments-hint">支持图片、PDF、Office 等；在表单内 Ctrl+V 可粘贴截图。附件随加密备份导入导出。</span>
+                </div>
+              </div>
+            </div>
             <div class="meeting-form-actions">
               <button type="submit" class="btn-primary" id="mm-submit-btn">保存纪要</button>
               <button type="button" class="btn-secondary hidden" id="mm-cancel-edit">取消编辑</button>
@@ -451,6 +464,21 @@
         <button type="submit" class="btn-primary">确定</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- 附件预览 -->
+  <dialog id="attachment-preview-dialog" class="attachment-preview-dialog">
+    <div class="attachment-preview-header">
+      <h3 id="attachment-preview-title">附件预览</h3>
+      <button type="button" id="attachment-preview-close" class="btn-icon" aria-label="关闭">×</button>
+    </div>
+    <div class="attachment-preview-body">
+      <img id="attachment-preview-image" alt="" />
+    </div>
+    <div class="attachment-preview-actions dialog-actions">
+      <button type="button" id="attachment-preview-download" class="btn-secondary">下载</button>
+      <button type="button" id="attachment-preview-newtab" class="btn-secondary">新标签页打开</button>
+    </div>
   </dialog>
 
   <script src="js/date-utils.js"></script>

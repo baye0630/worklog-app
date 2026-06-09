@@ -22,6 +22,7 @@ const App = (() => {
     '#5e5ce6',
   ];
   const TRIVIAL_TAG = '琐碎任务';
+  const MAX_MEETING_ATTACHMENT_BYTES = 5 * 1024 * 1024;
   const DEFAULT_DATA = () => ({
     logs: [],
     schedules: [],
@@ -48,6 +49,9 @@ const App = (() => {
   let appEventsBound = false;
   const expandedKeyProjectIds = new Set();
   const expandedMeetingIds = new Set();
+  let meetingFormAttachments = [];
+  let attachmentPreviewObjectUrl = '';
+  let attachmentPreviewCurrent = null;
   let passwordPromptResolve = null;
   let lockEventsBound = false;
 
@@ -115,6 +119,7 @@ const App = (() => {
     if (normalizeProjectTags()) needsSave = true;
     if (ensureScheduleColors()) needsSave = true;
     if (ensureScheduleWeekIds()) needsSave = true;
+    if (ensureMeetingAttachments()) needsSave = true;
     if (needsSave) await CryptoVault.saveEncrypted(pwd, data);
     return data;
   }
@@ -152,6 +157,7 @@ const App = (() => {
     setScheduleWeekDefaults();
     setDateInputsToday();
     setMeetingFormTimeDefault();
+    renderMeetingAttachmentsForm();
     updateQuickEntryShortcutHint();
     updateTrivialFilterSwitch();
     bindEvents();
@@ -790,6 +796,24 @@ const App = (() => {
       await saveMeeting();
     });
     $('#mm-cancel-edit').addEventListener('click', resetMeetingForm);
+    $('#mm-attachment-input').addEventListener('change', async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = '';
+      if (files.length) await addMeetingFormAttachments(files);
+    });
+    $('#meeting-form').addEventListener('paste', handleMeetingFormPaste);
+
+    $('#attachment-preview-close').addEventListener('click', closeAttachmentPreview);
+    $('#attachment-preview-dialog').addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeAttachmentPreview();
+    });
+    $('#attachment-preview-download').addEventListener('click', () => {
+      if (attachmentPreviewCurrent) downloadMeetingAttachment(attachmentPreviewCurrent);
+    });
+    $('#attachment-preview-newtab').addEventListener('click', () => {
+      if (attachmentPreviewCurrent) openMeetingAttachmentInNewTab(attachmentPreviewCurrent);
+    });
 
     $('#kp-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1854,6 +1878,227 @@ const App = (() => {
     });
   }
 
+  function ensureMeetingAttachments() {
+    if (!data?.meetings?.length) return false;
+    let changed = false;
+    data.meetings.forEach((meeting) => {
+      if (!Array.isArray(meeting.attachments)) {
+        meeting.attachments = [];
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
+  function isImageMime(mime) {
+    return typeof mime === 'string' && mime.startsWith('image/');
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function attachmentToBlob(att) {
+    const bytes = Uint8Array.from(atob(att.data), (c) => c.charCodeAt(0));
+    return new Blob([bytes], { type: att.mimeType || 'application/octet-stream' });
+  }
+
+  function revokeAttachmentPreviewUrl() {
+    if (attachmentPreviewObjectUrl) {
+      URL.revokeObjectURL(attachmentPreviewObjectUrl);
+      attachmentPreviewObjectUrl = '';
+    }
+  }
+
+  function closeAttachmentPreview() {
+    revokeAttachmentPreviewUrl();
+    attachmentPreviewCurrent = null;
+    const img = $('#attachment-preview-image');
+    if (img) img.removeAttribute('src');
+    $('#attachment-preview-dialog')?.close();
+  }
+
+  function showMeetingAttachmentPreview(att) {
+    if (!isImageMime(att.mimeType)) {
+      downloadMeetingAttachment(att);
+      return;
+    }
+    revokeAttachmentPreviewUrl();
+    attachmentPreviewCurrent = att;
+    const blob = attachmentToBlob(att);
+    attachmentPreviewObjectUrl = URL.createObjectURL(blob);
+    $('#attachment-preview-title').textContent = att.name || '附件预览';
+    $('#attachment-preview-image').src = attachmentPreviewObjectUrl;
+    $('#attachment-preview-image').alt = att.name || '附件预览';
+    $('#attachment-preview-dialog').showModal();
+  }
+
+  function openMeetingAttachmentInNewTab(att) {
+    const blob = attachmentToBlob(att);
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      URL.revokeObjectURL(url);
+      alert('无法打开新标签页，请使用应用内预览或下载。');
+      return;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  function attachmentDataUrl(att) {
+    const mime = att.mimeType || 'application/octet-stream';
+    return `data:${mime};base64,${att.data}`;
+  }
+
+  function cloneMeetingAttachments(attachments) {
+    return (attachments || []).map((att) => ({ ...att }));
+  }
+
+  function readFileAsMeetingAttachment(file, nameOverride) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(',');
+        const base64 = comma >= 0 ? result.slice(comma + 1) : result;
+        resolve({
+          id: uid(),
+          name: nameOverride || file.name || '未命名文件',
+          mimeType: file.type || 'application/octet-stream',
+          data: base64,
+          size: file.size,
+          addedAt: Date.now(),
+        });
+      };
+      reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addMeetingFormAttachments(files) {
+    for (const file of files) {
+      if (!file) continue;
+      if (file.size > MAX_MEETING_ATTACHMENT_BYTES) {
+        alert(`「${file.name}」超过 ${formatFileSize(MAX_MEETING_ATTACHMENT_BYTES)} 上限，已跳过。`);
+        continue;
+      }
+      try {
+        const att = await readFileAsMeetingAttachment(file);
+        meetingFormAttachments.push(att);
+      } catch {
+        alert(`读取「${file.name}」失败，请重试。`);
+      }
+    }
+    renderMeetingAttachmentsForm();
+  }
+
+  async function handleMeetingFormPaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items?.length) return;
+
+    const imageFiles = [];
+    for (const item of items) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      const ext = blob.type.split('/')[1] || 'png';
+      const stamped = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const name = `截图 ${stamped.getFullYear()}-${pad(stamped.getMonth() + 1)}-${pad(stamped.getDate())} ${pad(stamped.getHours())}${pad(stamped.getMinutes())}${pad(stamped.getSeconds())}.${ext}`;
+      imageFiles.push(new File([blob], name, { type: blob.type || 'image/png' }));
+    }
+    if (!imageFiles.length) return;
+
+    e.preventDefault();
+    await addMeetingFormAttachments(imageFiles);
+  }
+
+  function removeMeetingFormAttachment(id) {
+    meetingFormAttachments = meetingFormAttachments.filter((att) => att.id !== id);
+    renderMeetingAttachmentsForm();
+  }
+
+  function renderMeetingAttachmentsForm() {
+    const list = $('#mm-attachments-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    meetingFormAttachments.forEach((att) => {
+      const li = document.createElement('li');
+      li.className = 'mm-attachment-item';
+      li.innerHTML = `
+        <button type="button" class="mm-attachment-remove" aria-label="移除附件">×</button>
+        <div class="mm-attachment-preview">${renderAttachmentPreviewHtml(att)}</div>
+        <div class="mm-attachment-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</div>
+      `;
+      li.querySelector('.mm-attachment-remove').addEventListener('click', () => removeMeetingFormAttachment(att.id));
+      list.appendChild(li);
+    });
+  }
+
+  function renderAttachmentPreviewHtml(att) {
+    if (isImageMime(att.mimeType)) {
+      return `<img src="${attachmentDataUrl(att)}" alt="${escapeHtml(att.name)}" loading="lazy" />`;
+    }
+    return '<span class="mm-attachment-file-icon" aria-hidden="true">📄</span>';
+  }
+
+  function downloadMeetingAttachment(att) {
+    const blob = attachmentToBlob(att);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = att.name || 'attachment';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function openMeetingAttachment(att) {
+    if (isImageMime(att.mimeType)) {
+      showMeetingAttachmentPreview(att);
+      return;
+    }
+    downloadMeetingAttachment(att);
+  }
+
+  function renderMeetingAttachmentsCardHtml(attachments) {
+    if (!attachments?.length) return '';
+    const items = attachments
+      .map(
+        (att) => `
+        <div class="meeting-card-attachment" data-attachment-id="${escapeHtml(att.id)}">
+          <div class="mm-attachment-preview" role="button" tabindex="0" aria-label="打开 ${escapeHtml(att.name)}">
+            ${renderAttachmentPreviewHtml(att)}
+          </div>
+          <div class="mm-attachment-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</div>
+          <div class="meeting-card-attachment-actions">
+            <button type="button" class="btn-secondary btn-att-open">打开</button>
+            <button type="button" class="btn-secondary btn-att-download">下载</button>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+    return `
+      <div class="meeting-card-section">
+        <h4 class="meeting-card-label">附件 (${attachments.length})</h4>
+        <div class="meeting-card-attachments">${items}</div>
+      </div>
+    `;
+  }
+
+  function bindMeetingAttachmentActions(card, meeting) {
+    const attachments = meeting.attachments || [];
+    attachments.forEach((att) => {
+      const wrap = card.querySelector(`[data-attachment-id="${att.id}"]`);
+      if (!wrap) return;
+      wrap.querySelector('.mm-attachment-preview')?.addEventListener('click', () => openMeetingAttachment(att));
+      wrap.querySelector('.btn-att-open')?.addEventListener('click', () => openMeetingAttachment(att));
+      wrap.querySelector('.btn-att-download')?.addEventListener('click', () => downloadMeetingAttachment(att));
+    });
+  }
+
   function setMeetingFormTimeDefault() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -1867,6 +2112,8 @@ const App = (() => {
     $('#mm-participants').value = '';
     $('#mm-content').value = '';
     $('#mm-todos').value = '';
+    meetingFormAttachments = [];
+    renderMeetingAttachmentsForm();
     $('#mm-submit-btn').textContent = '保存纪要';
     $('#mm-cancel-edit').classList.add('hidden');
     setMeetingFormTimeDefault();
@@ -1890,6 +2137,7 @@ const App = (() => {
       participants: $('#mm-participants').value.trim(),
       content,
       todos: $('#mm-todos').value.trim(),
+      attachments: cloneMeetingAttachments(meetingFormAttachments),
       timestamp: ts,
       date: DateUtils.toDateKey(new Date(ts)),
     };
@@ -1914,6 +2162,8 @@ const App = (() => {
     $('#mm-participants').value = meeting.participants || '';
     $('#mm-content').value = meeting.content || '';
     $('#mm-todos').value = meeting.todos || '';
+    meetingFormAttachments = cloneMeetingAttachments(meeting.attachments);
+    renderMeetingAttachmentsForm();
     const dt = new Date(meeting.timestamp);
     dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
     $('#mm-time').value = dt.toISOString().slice(0, 16);
@@ -1988,6 +2238,7 @@ const App = (() => {
 
       const title = meeting.topic || meeting.content?.slice(0, 40) || '未命名会议';
       const todoCount = countMeetingTodos(meeting.todos);
+      const attachmentCount = meeting.attachments?.length || 0;
 
       const card = document.createElement('article');
       card.className = `meeting-card ${expanded ? 'meeting-card--expanded' : 'meeting-card--collapsed'}`;
@@ -2006,8 +2257,13 @@ const App = (() => {
           </div>
         </header>
         ${
-          todoCount
-            ? `<div class="meeting-card-stats"><span>Todo ${todoCount} 项</span></div>`
+          todoCount || attachmentCount
+            ? `<div class="meeting-card-stats">${[
+                todoCount ? `<span>Todo ${todoCount} 项</span>` : '',
+                attachmentCount ? `<span>附件 ${attachmentCount} 个</span>` : '',
+              ]
+                .filter(Boolean)
+                .join('')}</div>`
             : ''
         }
         <div class="meeting-card-body">
@@ -2019,12 +2275,14 @@ const App = (() => {
             <h4 class="meeting-card-label">Todo</h4>
             ${renderMeetingTodosHtml(meeting.todos)}
           </div>
+          ${renderMeetingAttachmentsCardHtml(meeting.attachments)}
         </div>
       `;
 
       card.querySelector('.meeting-card-toggle').addEventListener('click', () => toggleMeetingCard(card, meeting.id));
       card.querySelector('.btn-edit').addEventListener('click', () => editMeeting(meeting));
       card.querySelector('.btn-delete').addEventListener('click', () => deleteMeeting(meeting.id));
+      bindMeetingAttachmentActions(card, meeting);
       list.appendChild(card);
     });
   }

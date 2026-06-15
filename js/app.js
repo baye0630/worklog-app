@@ -1606,6 +1606,20 @@ const App = (() => {
     li.className = `log-item log-item--${view}`;
     const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
     li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
+    if (log.type === 'doing') {
+      const main = li.querySelector('.log-item-main');
+      li.classList.add('log-item--quick-complete');
+      main.setAttribute('role', 'button');
+      main.setAttribute('tabindex', '0');
+      main.setAttribute('title', '点击标记为已完成');
+      main.setAttribute('aria-label', '点击标记为已完成');
+      main.addEventListener('click', () => completeDoingLog(log.id));
+      main.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        completeDoingLog(log.id);
+      });
+    }
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
     return li;
@@ -1669,6 +1683,15 @@ const App = (() => {
     log.date = DateUtils.toDateKey(new Date(ts));
     await persist();
     $('#edit-dialog').close();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function completeDoingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'doing') return;
+    log.type = 'done';
+    await persist();
     renderTimeline();
     if (currentView === 'key-projects') renderKeyProjects();
   }

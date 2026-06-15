@@ -994,6 +994,22 @@ body:has(#app:not(.hidden)) {
   box-shadow: var(--apple-shadow-lg);
 }
 
+.log-item--quick-complete .log-item-main {
+  cursor: pointer;
+}
+
+.log-item--quick-complete .log-item-main:hover .type-doing,
+.log-item--quick-complete .log-item-main:focus-visible .type-doing {
+  background: rgba(52, 199, 89, 0.12);
+  color: #248a3d;
+}
+
+.log-item--quick-complete .log-item-main:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, 0.45);
+  outline-offset: calc(3px * var(--ui-scale));
+  border-radius: calc(var(--apple-radius) * 0.6);
+}
+
 .log-item--meeting {
   cursor: pointer;
   border-left: calc(3px * var(--ui-scale)) solid var(--apple-link);

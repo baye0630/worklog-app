@@ -2379,6 +2379,29 @@ body:has(#app:not(.hidden)) {
   background: var(--apple-surface);
 }
 
+.settings-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.settings-field label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--apple-text-secondary);
+}
+
+.settings-field select {
+  min-width: calc(180px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: 1px solid var(--apple-border-strong);
+  border-radius: var(--apple-radius-sm);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  background: var(--apple-surface);
+}
+
 .hint {
   color: var(--apple-text-secondary);
   font-size: var(--fs-body);

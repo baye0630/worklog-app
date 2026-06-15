@@ -32,7 +32,13 @@ const App = (() => {
     keyProjects: [],
     dailySummaries: {},
     weeklySummaries: {},
-    settings: { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' },
+    settings: {
+      weekStartDay: 'monday',
+      projectTags: [],
+      timelineView: 'detailed',
+      trivialFilterMode: 'all',
+      defaultEntryType: 'done',
+    },
   });
 
   let password = '';
@@ -195,7 +201,7 @@ const App = (() => {
     $('#entry-notes').value = '';
     $('#entry-deadline').value = '';
     $('#entry-tag-trivial').checked = false;
-    $('#entry-type').value = 'done';
+    $('#entry-type').value = getDefaultEntryType();
     renderKeyProjectPicker($('#entry-key-projects'), []);
     setDateInputsToday();
   }
@@ -235,7 +241,7 @@ const App = (() => {
   function normalizeProjectTags() {
     if (!data) return false;
     if (!data.settings) {
-      data.settings = { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' };
+      data.settings = DEFAULT_DATA().settings;
       return true;
     }
     let changed = false;
@@ -251,7 +257,23 @@ const App = (() => {
       data.settings.trivialFilterMode = 'all';
       changed = true;
     }
+    if (!['done', 'doing', 'plan'].includes(data.settings.defaultEntryType)) {
+      data.settings.defaultEntryType = 'done';
+      changed = true;
+    }
     return changed;
+  }
+
+  function getDefaultEntryType() {
+    return ['done', 'doing', 'plan'].includes(data?.settings?.defaultEntryType)
+      ? data.settings.defaultEntryType
+      : 'done';
+  }
+
+  function updateDefaultEntryTypeSelect() {
+    const select = $('#default-entry-type');
+    if (!select) return;
+    select.value = getDefaultEntryType();
   }
 
   function getTimelineView() {
@@ -682,6 +704,11 @@ const App = (() => {
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
     $('#filter-trivial').addEventListener('click', () => cycleTimelineTrivialFilter());
+    $('#default-entry-type').addEventListener('change', async (e) => {
+      normalizeProjectTags();
+      data.settings.defaultEntryType = e.target.value;
+      await persist();
+    });
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -1019,6 +1046,7 @@ const App = (() => {
     if (view === 'settings') {
       renderProjectTagList();
       refreshProjectSelects();
+      updateDefaultEntryTypeSelect();
     }
     if (view === 'summary') {
       renderSummary();

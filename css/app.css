@@ -1047,6 +1047,8 @@ body:has(#app:not(.hidden)) {
 }
 
 .log-item--compact {
+  flex-direction: column;
+  align-items: flex-start;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   margin-bottom: calc(6px * var(--ui-scale));
   gap: calc(8px * var(--ui-scale));
@@ -1098,6 +1100,7 @@ body:has(#app:not(.hidden)) {
 .log-compact-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: var(--fs-xs);
   color: var(--apple-text-secondary);
@@ -1119,10 +1122,11 @@ body:has(#app:not(.hidden)) {
 .log-compact-tags {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
   overflow: hidden;
-  margin-left: auto;
+  margin-left: calc(8px * var(--ui-scale));
 }
 
 .log-item--compact .log-tag {
@@ -1209,6 +1213,14 @@ body:has(#app:not(.hidden)) {
 .log-item--compact .log-actions .btn-secondary,
 .log-item--compact .log-actions .btn-danger {
   padding: 4px 8px;
+}
+
+.log-item--compact .log-actions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  margin-left: 0;
+  margin-top: calc(2px * var(--ui-scale));
 }
 
 .empty {

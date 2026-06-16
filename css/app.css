@@ -658,6 +658,10 @@ body:has(#app:not(.hidden)) {
   color: var(--type-doing);
 }
 
+.stat-waiting {
+  color: #8a5a00;
+}
+
 .stat-plan {
   color: var(--type-plan);
 }
@@ -834,6 +838,18 @@ body:has(#app:not(.hidden)) {
   color: var(--apple-text-secondary);
 }
 
+.timeline-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(18px * var(--ui-scale));
+  align-items: start;
+  width: 100%;
+}
+
+.timeline-board--has-waiting {
+  grid-template-columns: minmax(0, 1fr) minmax(calc(380px * var(--ui-scale)), calc(520px * var(--ui-scale)));
+}
+
 .timeline-axis {
   --timeline-rail-x: calc(11px * var(--ui-scale));
   position: relative;
@@ -936,6 +952,68 @@ body:has(#app:not(.hidden)) {
 
 .timeline-day-body {
   min-width: 0;
+}
+
+.waiting-panel {
+  position: sticky;
+  top: calc(18px * var(--ui-scale));
+  background: transparent;
+  padding: 0;
+}
+
+.waiting-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: calc(12px * var(--ui-scale));
+  margin-bottom: calc(12px * var(--ui-scale));
+}
+
+.waiting-panel-header h3 {
+  margin: 0 0 calc(4px * var(--ui-scale));
+  font-family: var(--font-display);
+  font-size: calc(17px * var(--ui-scale));
+}
+
+.waiting-panel-header p {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--apple-text-secondary);
+  line-height: 1.35;
+}
+
+.waiting-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border-radius: var(--apple-radius-pill);
+  background: rgba(255, 204, 0, 0.18);
+  color: #8a5a00;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.waiting-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.waiting-panel-empty {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--apple-text-secondary);
+}
+
+.waiting-log-list .log-item {
+  margin-bottom: calc(10px * var(--ui-scale));
+}
+
+.waiting-log-list .log-item:last-child {
+  margin-bottom: 0;
 }
 
 .timeline-schedules {
@@ -1082,6 +1160,11 @@ body:has(#app:not(.hidden)) {
 .type-doing {
   background: rgba(255, 149, 0, 0.12);
   color: #c93400;
+}
+
+.type-waiting {
+  background: rgba(255, 204, 0, 0.18);
+  color: #8a5a00;
 }
 
 .type-plan {
@@ -2412,6 +2495,39 @@ body:has(#app:not(.hidden)) {
   gap: calc(10px * var(--ui-scale));
 }
 
+.settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(10px * var(--ui-scale));
+  margin: 0 0 calc(16px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale));
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  background: var(--apple-bg-alt);
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.settings-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.settings-toggle strong {
+  font-size: var(--fs-sm);
+  color: var(--apple-text);
+}
+
+.settings-toggle small {
+  font-size: var(--fs-xs);
+  color: var(--apple-text-secondary);
+  line-height: 1.35;
+}
+
 .settings-field label {
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -2460,6 +2576,16 @@ body:has(#app:not(.hidden)) {
 .settings-block .inline-form .btn-danger,
 .settings-block .inline-form .file-btn {
   justify-self: start;
+}
+
+@media (max-width: 1100px) {
+  .timeline-board {
+    grid-template-columns: 1fr;
+  }
+
+  .waiting-panel {
+    position: static;
+  }
 }
 
 .inline-form input,

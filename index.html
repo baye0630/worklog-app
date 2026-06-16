@@ -111,6 +111,7 @@
             <option value="">全部</option>
             <option value="done">已完成</option>
             <option value="doing">进行中</option>
+            <option value="waiting">等结果</option>
             <option value="plan">计划</option>
           </select>
           <label>项目</label>
@@ -128,7 +129,10 @@
             <button type="button" class="segmented-toggle-btn active" data-timeline-view="detailed" aria-pressed="true">详细</button>
           </div>
         </div>
-        <div id="timeline-axis" class="timeline-axis"></div>
+        <div class="timeline-board">
+          <div id="timeline-axis" class="timeline-axis"></div>
+          <aside id="waiting-panel" class="waiting-panel" aria-label="等结果任务"></aside>
+        </div>
         <p id="timeline-empty" class="empty hidden">暂无记录，点击左侧「快速录入」添加吧。</p>
       </section>
 
@@ -361,11 +365,19 @@
         <div class="settings-block">
           <h3>录入偏好</h3>
           <p class="hint">设置打开快速录入时默认选中的任务状态；不影响已有记录。</p>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-enable-waiting" />
+            <span>
+              <strong>启用等结果模块</strong>
+              <small>开启后显示「等结果」状态、顶部统计和右侧等待栏。</small>
+            </span>
+          </label>
           <div class="settings-field">
             <label for="default-entry-type">默认录入状态</label>
             <select id="default-entry-type">
               <option value="done">已完成</option>
               <option value="doing">进行中</option>
+              <option value="waiting">等结果</option>
               <option value="plan">计划（待办）</option>
             </select>
           </div>
@@ -398,6 +410,7 @@
       <select id="entry-type">
         <option value="done">已完成</option>
         <option value="doing">进行中</option>
+        <option value="waiting">等结果</option>
         <option value="plan">计划（待办）</option>
       </select>
       <input type="datetime-local" id="entry-time" />
@@ -434,6 +447,7 @@
       <select id="edit-type">
         <option value="done">已完成</option>
         <option value="doing">进行中</option>
+        <option value="waiting">等结果</option>
         <option value="plan">计划（待办）</option>
       </select>
       <input type="datetime-local" id="edit-time" />

@@ -6,7 +6,7 @@
 
 const SummaryEngine = (() => {
 
-  const TYPE_LABELS = { done: '已完成', doing: '进行中', plan: '计划' };
+  const TYPE_LABELS = { done: '已完成', doing: '进行中', waiting: '等结果', plan: '计划' };
 
   const LOG_TAG_OPTIONS = ['琐碎任务'];
 
@@ -180,6 +180,20 @@ const SummaryEngine = (() => {
 
   }
 
+  function buildWaitingList(logs, { includeDate = false } = {}) {
+
+    if (!logs.length) return '（无）';
+
+    return logs
+
+      .sort((a, b) => b.timestamp - a.timestamp)
+
+      .map((l) => formatResultLine(l, { includeDate, includeDeadline: true }))
+
+      .join('\n');
+
+  }
+
 
 
   function buildPlanList(logs) {
@@ -242,6 +256,8 @@ const SummaryEngine = (() => {
 
     const doing = dayLogs.filter((l) => l.type === 'doing');
 
+    const waiting = dayLogs.filter((l) => l.type === 'waiting');
+
     const plan = dayLogs.filter((l) => l.type === 'plan');
 
 
@@ -280,6 +296,12 @@ const SummaryEngine = (() => {
 
     }
 
+    if (waiting.length) {
+
+      md += `### 等结果\n${buildWaitingList(waiting)}\n\n`;
+
+    }
+
 
 
     md += `### 计划 / 待办\n${buildPlanList(plan)}\n\n`;
@@ -311,6 +333,8 @@ const SummaryEngine = (() => {
     const done = weekLogs.filter((l) => l.type === 'done');
 
     const doing = weekLogs.filter((l) => l.type === 'doing');
+
+    const waiting = weekLogs.filter((l) => l.type === 'waiting');
 
     const plan = weekLogs.filter((l) => l.type === 'plan');
 
@@ -345,6 +369,12 @@ const SummaryEngine = (() => {
     if (doing.length) {
 
       md += `### 进行中\n${buildDoingList(doing, { includeDate: true })}\n\n`;
+
+    }
+
+    if (waiting.length) {
+
+      md += `### 等结果\n${buildWaitingList(waiting, { includeDate: true })}\n\n`;
 
     }
 

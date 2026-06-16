@@ -38,6 +38,7 @@ const App = (() => {
       timelineView: 'detailed',
       trivialFilterMode: 'all',
       defaultEntryType: 'done',
+      waitingFeatureEnabled: false,
     },
   });
 
@@ -167,6 +168,7 @@ const App = (() => {
     renderMeetingAttachmentsForm();
     updateQuickEntryShortcutHint();
     updateTrivialFilterSwitch();
+    updateWaitingFeatureControls();
     bindEvents();
     switchView('timeline');
     renderAll();
@@ -257,23 +259,56 @@ const App = (() => {
       data.settings.trivialFilterMode = 'all';
       changed = true;
     }
-    if (!['done', 'doing', 'plan'].includes(data.settings.defaultEntryType)) {
+    if (typeof data.settings.waitingFeatureEnabled !== 'boolean') {
+      data.settings.waitingFeatureEnabled = false;
+      changed = true;
+    }
+    if (!['done', 'doing', 'waiting', 'plan'].includes(data.settings.defaultEntryType)) {
+      data.settings.defaultEntryType = 'done';
+      changed = true;
+    }
+    if (!data.settings.waitingFeatureEnabled && data.settings.defaultEntryType === 'waiting') {
       data.settings.defaultEntryType = 'done';
       changed = true;
     }
     return changed;
   }
 
+  function isWaitingFeatureEnabled() {
+    return data?.settings?.waitingFeatureEnabled === true;
+  }
+
   function getDefaultEntryType() {
-    return ['done', 'doing', 'plan'].includes(data?.settings?.defaultEntryType)
+    return ['done', 'doing', 'waiting', 'plan'].includes(data?.settings?.defaultEntryType)
       ? data.settings.defaultEntryType
       : 'done';
+  }
+
+  function setWaitingOptionVisibility(select, enabled) {
+    if (!select) return;
+    const option = [...select.options].find((o) => o.value === 'waiting');
+    if (!option) return;
+    option.hidden = !enabled;
+    option.disabled = !enabled;
+    if (!enabled && select.value === 'waiting') {
+      select.value = select.id === 'filter-type' ? '' : 'done';
+    }
+  }
+
+  function updateWaitingFeatureControls() {
+    const enabled = isWaitingFeatureEnabled();
+    const checkbox = $('#setting-enable-waiting');
+    if (checkbox) checkbox.checked = enabled;
+    ['#filter-type', '#entry-type', '#edit-type', '#default-entry-type'].forEach((sel) => {
+      setWaitingOptionVisibility($(sel), enabled);
+    });
   }
 
   function updateDefaultEntryTypeSelect() {
     const select = $('#default-entry-type');
     if (!select) return;
     select.value = getDefaultEntryType();
+    updateWaitingFeatureControls();
   }
 
   function getTimelineView() {
@@ -729,6 +764,18 @@ const App = (() => {
       data.settings.defaultEntryType = e.target.value;
       await persist();
     });
+    $('#setting-enable-waiting').addEventListener('change', async (e) => {
+      normalizeProjectTags();
+      data.settings.waitingFeatureEnabled = e.target.checked;
+      if (!data.settings.waitingFeatureEnabled && data.settings.defaultEntryType === 'waiting') {
+        data.settings.defaultEntryType = 'done';
+      }
+      await persist();
+      updateWaitingFeatureControls();
+      updateDefaultEntryTypeSelect();
+      renderTimeline();
+      renderSummary();
+    });
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -1148,7 +1195,7 @@ const App = (() => {
 
   function getMeetingTimelineEntries(ctx) {
     if (!data?.meetings?.length) return [];
-    if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'plan') return [];
+    if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting' || ctx.typeFilter === 'plan') return [];
     if (ctx.projectFilter) return [];
     if (ctx.tagFilter === TRIVIAL_TAG) return [];
     return data.meetings.map(meetingToTimelineEntry);
@@ -1258,6 +1305,7 @@ const App = (() => {
     return `
       <span class="timeline-day-stat stat-done">已完成 ${stats.done}</span>
       <span class="timeline-day-stat stat-doing">进行中 ${stats.doing}</span>
+      ${isWaitingFeatureEnabled() ? `<span class="timeline-day-stat stat-waiting">等结果 ${stats.waiting}</span>` : ''}
       <span class="timeline-day-stat stat-plan">计划 ${stats.plan}</span>
     `;
   }
@@ -1310,7 +1358,7 @@ const App = (() => {
 
   /** 固定日程：打勾=已完成，未打勾=计划；不属于任何项目；非琐碎任务 */
   function filterSchedulesForTimeline(dateKey, ctx) {
-    if (!ctx.showSchedules || ctx.typeFilter === 'doing') return [];
+    if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return [];
     let schedules = ScheduleLogic.getSchedulesForDate(data.schedules, dateKey);
     if (ctx.typeFilter === 'done') {
       schedules = schedules.filter((s) => isScheduleCompleted(s.id, dateKey));
@@ -1344,7 +1392,7 @@ const App = (() => {
     if (logs.length) {
       start = DateUtils.parseDateKey([...new Set(logs.map((l) => l.date))].sort()[0]);
     }
-    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing';
+    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing' && ctx.typeFilter !== 'waiting';
     if (includeSchedules && data.schedules.length) {
       ({ start, end } = extendTimelineSpanFromSchedules(start, end));
       if (!logs.length && start > today) start = today;
@@ -1355,7 +1403,7 @@ const App = (() => {
   function countScheduleStatsInSpan(start, end, ctx) {
     let done = 0;
     let plan = 0;
-    if (!ctx.showSchedules || ctx.typeFilter === 'doing') return { done, plan };
+    if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return { done, plan };
     for (let cursor = new Date(start); cursor <= end; cursor = DateUtils.addDays(cursor, 1)) {
       const dk = DateUtils.toDateKey(cursor);
       filterSchedulesForTimeline(dk, ctx).forEach((s) => {
@@ -1368,7 +1416,7 @@ const App = (() => {
 
   function collectTimelineDates(logs, ctx) {
     const keys = new Set(logs.map((l) => l.date));
-    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing';
+    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing' && ctx.typeFilter !== 'waiting';
     const { start, end } = getTimelineSpan(logs, ctx);
 
     if (!keys.size && !includeSchedules) return [];
@@ -1490,16 +1538,63 @@ const App = (() => {
     return {
       done: scopeLogs.filter((l) => l.type === 'done').length + scopeMeetings.length + scheduleStats.done,
       doing: scopeLogs.filter((l) => l.type === 'doing').length,
+      waiting: scopeLogs.filter((l) => l.type === 'waiting').length,
       plan: scopeLogs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
+  }
+
+  function renderWaitingPanel(waitingLogs) {
+    const panel = $('#waiting-panel');
+    if (!panel) return;
+    if (!isWaitingFeatureEnabled()) {
+      panel.classList.add('hidden');
+      panel.parentElement?.classList.remove('timeline-board--has-waiting');
+      panel.innerHTML = '';
+      return;
+    }
+    const sorted = [...waitingLogs].sort((a, b) => {
+      if (a.deadline && b.deadline && a.deadline !== b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline && !b.deadline) return -1;
+      if (!a.deadline && b.deadline) return 1;
+      return b.timestamp - a.timestamp;
+    });
+
+    panel.classList.toggle('hidden', sorted.length === 0);
+    panel.parentElement?.classList.toggle('timeline-board--has-waiting', sorted.length > 0);
+    if (!sorted.length) {
+      panel.innerHTML = '';
+      return;
+    }
+
+    panel.className = 'waiting-panel';
+    panel.innerHTML = `
+      <header class="waiting-panel-header">
+        <div>
+          <h3>等结果</h3>
+          <p>依赖他人输出，等待验收的任务</p>
+        </div>
+        <span class="waiting-panel-count">${sorted.length}</span>
+      </header>
+    `;
+
+    const list = document.createElement('ul');
+    list.className = 'log-list waiting-log-list';
+    sorted.forEach((log) => {
+      list.appendChild(createLogItem(log, 'detailed'));
+    });
+    panel.appendChild(list);
   }
 
   function renderTimeline() {
     const ctx = getTimelineFilterContext();
     const { typeFilter } = ctx;
-    const scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
+    const waitingEnabled = isWaitingFeatureEnabled();
+    let scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
+    if (!waitingEnabled) scopeLogs = scopeLogs.filter((l) => l.type !== 'waiting');
     const headerStats = computeTimelineHeaderStats(scopeLogs, ctx);
+    const waitingLogs = waitingEnabled ? scopeLogs.filter((l) => l.type === 'waiting') : [];
     let logs = applyTimelineLogFilters([...data.logs], ctx);
+    if (!waitingEnabled || !ctx.typeFilter) logs = logs.filter((l) => l.type !== 'waiting');
     logs = [...logs, ...getMeetingTimelineEntries(ctx)];
 
     const statChip = (type, label, count) => {
@@ -1507,11 +1602,12 @@ const App = (() => {
       const typeClass = type ? `stat-${type}` : 'stat-all';
       return `<button type="button" class="stat-item stat-filter ${typeClass}${active}" data-filter-type="${type}">${label} ${count}</button>`;
     };
-    const allCount = headerStats.done + headerStats.doing + headerStats.plan;
+    const allCount = headerStats.done + headerStats.doing + (waitingEnabled ? headerStats.waiting : 0) + headerStats.plan;
     $('#timeline-stats').innerHTML =
       statChip('', '全部', allCount) +
       statChip('done', '已完成', headerStats.done) +
       statChip('doing', '进行中', headerStats.doing) +
+      (waitingEnabled ? statChip('waiting', '等结果', headerStats.waiting) : '') +
       statChip('plan', '计划', headerStats.plan);
 
     const byDate = new Map();
@@ -1526,7 +1622,8 @@ const App = (() => {
     axis.innerHTML = '';
     updateTimelineViewToggle();
     updateTrivialFilterSwitch();
-    $('#timeline-empty').classList.toggle('hidden', dates.length > 0);
+    renderWaitingPanel(waitingLogs);
+    $('#timeline-empty').classList.toggle('hidden', dates.length > 0 || waitingLogs.length > 0);
 
     const today = DateUtils.toDateKey(new Date());
 
@@ -1540,6 +1637,7 @@ const App = (() => {
           dayLogs.filter((l) => l.type === 'done').length +
           daySchedules.filter((s) => isScheduleCompleted(s.id, dateKey)).length,
         doing: dayLogs.filter((l) => l.type === 'doing').length,
+        waiting: waitingEnabled ? dayLogs.filter((l) => l.type === 'waiting').length : 0,
         plan:
           dayLogs.filter((l) => l.type === 'plan').length +
           daySchedules.filter((s) => !isScheduleCompleted(s.id, dateKey)).length,
@@ -1682,8 +1780,8 @@ const App = (() => {
     `;
   }
 
-  function createLogItem(log) {
-    const view = getTimelineView();
+  function createLogItem(log, forcedView = '') {
+    const view = forcedView || getTimelineView();
     const li = document.createElement('li');
     li.className = `log-item log-item--${view}`;
     const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
@@ -1806,6 +1904,9 @@ const App = (() => {
 
   function renderSummary() {
     const dateKey = getSummaryDateKey();
+    const summaryLogs = isWaitingFeatureEnabled()
+      ? data.logs
+      : data.logs.filter((l) => l.type !== 'waiting');
     let text;
 
     if (summaryMode === 'daily') {
@@ -1814,7 +1915,7 @@ const App = (() => {
       } else {
         text = SummaryEngine.generateDaily(
           dateKey,
-          data.logs,
+          summaryLogs,
           data.schedules,
           data.scheduleCompletions
         );
@@ -1827,7 +1928,7 @@ const App = (() => {
         const weekStart = DateUtils.startOfWeek(DateUtils.parseDateKey(dateKey));
         text = SummaryEngine.generateWeekly(
           weekStart,
-          data.logs,
+          summaryLogs,
           data.schedules,
           data.scheduleCompletions
         );

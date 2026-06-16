@@ -777,6 +777,7 @@ const App = (() => {
       renderTimeline();
       renderSummary();
     });
+    $('#btn-move-past-plans-today').addEventListener('click', movePastPlansToToday);
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -1264,6 +1265,30 @@ const App = (() => {
     return `<span class="log-deadline${overdue ? ' overdue' : ''}">· ${escapeHtml(formatDeadlineLabel(log.deadline))}${overdue ? ' 已逾期' : ''}</span>`;
   }
 
+  async function movePastPlansToToday() {
+    const today = DateUtils.toDateKey(new Date());
+    const pastPlans = data.logs.filter((l) => l.type === 'plan' && l.date < today);
+    if (!pastPlans.length) {
+      alert('没有需要移动的历史计划任务');
+      return;
+    }
+    const count = pastPlans.length;
+    if (!confirm(`确定将 ${count} 条历史计划任务移至今天？`)) return;
+
+    const baseTs = Date.now();
+    pastPlans
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .forEach((log, i) => {
+        log.date = today;
+        log.timestamp = baseTs - i;
+      });
+
+    await persist();
+    renderAll();
+    if (currentView === 'timeline') scrollTimelineToToday(false);
+    alert(`已将 ${count} 条计划任务移至今天`);
+  }
+
   async function addLog() {
     const content = $('#entry-content').value.trim();
     if (!content) return;
@@ -1351,13 +1376,12 @@ const App = (() => {
     renderTimeline();
   }
 
-  function getLastWeekDateRange() {
-    const thisWeekStart = DateUtils.startOfWeek(new Date());
-    const lastWeekStart = DateUtils.addDays(thisWeekStart, -7);
-    const lastWeekEnd = DateUtils.endOfWeek(lastWeekStart);
+  function getThisWeekDateRange() {
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
     return {
-      start: DateUtils.toDateKey(lastWeekStart),
-      end: DateUtils.toDateKey(lastWeekEnd),
+      start: DateUtils.toDateKey(weekStart),
+      end: DateUtils.toDateKey(weekEnd),
     };
   }
 
@@ -1366,9 +1390,9 @@ const App = (() => {
     if (dateFilter === 'today') {
       return dateKey === DateUtils.toDateKey(new Date());
     }
-    if (dateFilter === 'exclude-last-week') {
-      const { start, end } = getLastWeekDateRange();
-      return dateKey < start || dateKey > end;
+    if (dateFilter === 'this-week') {
+      const { start, end } = getThisWeekDateRange();
+      return dateKey >= start && dateKey <= end;
     }
     return true;
   }

@@ -122,7 +122,7 @@
           <select id="filter-date">
             <option value="">全部</option>
             <option value="today">仅今天</option>
-            <option value="exclude-last-week">去除上周</option>
+            <option value="this-week">仅本周</option>
           </select>
           <button type="button" id="filter-trivial" class="filter-trivial-switch" aria-label="琐碎任务筛选：全部">
             <span class="filter-trivial-label">琐碎任务</span>
@@ -387,6 +387,12 @@
               <option value="plan">计划（待办）</option>
             </select>
           </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>任务整理</h3>
+          <p class="hint">将今天之前所有「计划」状态的任务移至今天时间线，便于集中处理遗留待办。</p>
+          <button type="button" id="btn-move-past-plans-today" class="btn-secondary">一键将往日计划移至今天</button>
         </div>
 
         <div class="settings-block">

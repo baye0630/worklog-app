@@ -998,20 +998,19 @@ body:has(#app:not(.hidden)) {
   box-shadow: var(--apple-shadow-lg);
 }
 
-.log-item--quick-complete .log-item-main {
+.log-quick-complete-trigger {
   cursor: pointer;
 }
 
-.log-item--quick-complete .log-item-main:hover .type-doing,
-.log-item--quick-complete .log-item-main:focus-visible .type-doing {
+.log-quick-complete-trigger:hover,
+.log-quick-complete-trigger:focus-visible {
   background: rgba(52, 199, 89, 0.12);
   color: #248a3d;
 }
 
-.log-item--quick-complete .log-item-main:focus-visible {
+.log-quick-complete-trigger:focus-visible {
   outline: 2px solid rgba(0, 113, 227, 0.45);
   outline-offset: calc(3px * var(--ui-scale));
-  border-radius: calc(var(--apple-radius) * 0.6);
 }
 
 .log-item--meeting {
@@ -1162,6 +1161,16 @@ body:has(#app:not(.hidden)) {
 
 .log-purpose {
   color: var(--apple-link);
+}
+
+.log-link {
+  color: var(--apple-link);
+  text-decoration: underline;
+  text-underline-offset: calc(2px * var(--ui-scale));
+}
+
+.log-link:hover {
+  color: var(--apple-blue-hover);
 }
 
 .log-tags {

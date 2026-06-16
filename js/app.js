@@ -1150,6 +1150,32 @@ const App = (() => {
       .replace(/"/g, '&quot;');
   }
 
+  function linkifyText(str) {
+    const text = String(str || '');
+    const urlRe = /https?:\/\/[^\s<>"']+/g;
+    let html = '';
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(urlRe)) {
+      const start = match.index;
+      let url = match[0];
+      let trailing = '';
+      const trailingMatch = url.match(/[),.;!?，。；！？、]+$/);
+      if (trailingMatch) {
+        trailing = trailingMatch[0];
+        url = url.slice(0, -trailing.length);
+      }
+
+      html += escapeHtml(text.slice(lastIndex, start));
+      html += `<a class="log-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+      html += escapeHtml(trailing);
+      lastIndex = start + match[0].length;
+    }
+
+    html += escapeHtml(text.slice(lastIndex));
+    return html;
+  }
+
   function formatDeadlineLabel(deadline) {
     if (!deadline) return '';
     const d = DateUtils.parseDateKey(deadline);
@@ -1576,9 +1602,9 @@ const App = (() => {
         ${deadlineMetaHtml(log)}
       </div>
       ${logTagsHtml(log)}
-      <p class="log-content">${escapeHtml(log.content)}</p>
-      ${log.purpose ? `<p class="log-purpose">目的：${escapeHtml(log.purpose)}</p>` : ''}
-      ${log.notes ? `<p class="log-notes">备注：${escapeHtml(log.notes)}</p>` : ''}
+      <p class="log-content">${linkifyText(log.content)}</p>
+      ${log.purpose ? `<p class="log-purpose">目的：${linkifyText(log.purpose)}</p>` : ''}
+      ${log.notes ? `<p class="log-notes">备注：${linkifyText(log.notes)}</p>` : ''}
     `;
   }
 
@@ -1622,9 +1648,9 @@ const App = (() => {
       .filter(Boolean)
       .join(' · ');
     const summaryParts = [
-      `<span>${escapeHtml(log.content)}</span>`,
-      log.purpose ? `<span class="log-compact-purpose"> · 目的：${escapeHtml(log.purpose)}</span>` : '',
-      log.notes ? `<span> · 备注：${escapeHtml(log.notes)}</span>` : '',
+      `<span>${linkifyText(log.content)}</span>`,
+      log.purpose ? `<span class="log-compact-purpose"> · 目的：${linkifyText(log.purpose)}</span>` : '',
+      log.notes ? `<span> · 备注：${linkifyText(log.notes)}</span>` : '',
     ].filter(Boolean);
 
     return `
@@ -1642,15 +1668,19 @@ const App = (() => {
     li.className = `log-item log-item--${view}`;
     const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
     li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
+    li.querySelectorAll('.log-link').forEach((link) => {
+      link.addEventListener('click', (e) => e.stopPropagation());
+    });
     if (log.type === 'doing') {
-      const main = li.querySelector('.log-item-main');
+      const badge = li.querySelector('.type-doing');
       li.classList.add('log-item--quick-complete');
-      main.setAttribute('role', 'button');
-      main.setAttribute('tabindex', '0');
-      main.setAttribute('title', '点击标记为已完成');
-      main.setAttribute('aria-label', '点击标记为已完成');
-      main.addEventListener('click', () => completeDoingLog(log.id));
-      main.addEventListener('keydown', (e) => {
+      badge.classList.add('log-quick-complete-trigger');
+      badge.setAttribute('role', 'button');
+      badge.setAttribute('tabindex', '0');
+      badge.setAttribute('title', '点击标记为已完成');
+      badge.setAttribute('aria-label', '点击标记为已完成');
+      badge.addEventListener('click', () => completeDoingLog(log.id));
+      badge.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
         completeDoingLog(log.id);

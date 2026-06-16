@@ -1618,13 +1618,18 @@ const App = (() => {
     ]
       .filter(Boolean)
       .join(' · ');
+    const summaryParts = [
+      `<span>${escapeHtml(log.content)}</span>`,
+      log.purpose ? `<span class="log-compact-purpose"> · 目的：${escapeHtml(log.purpose)}</span>` : '',
+      log.notes ? `<span> · 备注：${escapeHtml(log.notes)}</span>` : '',
+    ].filter(Boolean);
 
     return `
       <div class="log-compact-line log-compact-meta">
         <div class="log-compact-meta-start">${metaBits.join('')}</div>
         ${logCompactTagsInlineHtml(log)}
       </div>
-      <p class="log-compact-line log-compact-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</p>
+      <p class="log-compact-line log-compact-summary" title="${escapeHtml(summary)}">${summaryParts.join('')}</p>
     `;
   }
 

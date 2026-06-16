@@ -1144,6 +1144,10 @@ body:has(#app:not(.hidden)) {
   text-overflow: ellipsis;
 }
 
+.log-compact-purpose {
+  color: var(--apple-link);
+}
+
 .log-purpose,
 .log-notes {
   margin: 0 0 6px;

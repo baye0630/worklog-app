@@ -493,6 +493,20 @@ const App = (() => {
     if (currentView === 'timeline') renderTimeline();
   }
 
+  async function moveKeyProject(id, direction) {
+    const projects = getKeyProjects();
+    const index = projects.findIndex((p) => p.id === id);
+    if (index < 0) return;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= projects.length) return;
+
+    const [project] = projects.splice(index, 1);
+    projects.splice(nextIndex, 0, project);
+    await persist();
+    renderKeyProjects();
+    renderKeyProjectPickers();
+  }
+
   function toggleKeyProjectCard(card, projectId) {
     if (expandedKeyProjectIds.has(projectId)) {
       expandedKeyProjectIds.delete(projectId);
@@ -521,12 +535,14 @@ const App = (() => {
     empty?.classList.toggle('hidden', projects.length > 0);
     if (!projects.length) return;
 
-    projects.forEach((project) => {
+    projects.forEach((project, index) => {
       const logs = data.logs
         .filter((log) => log.keyProjectIds?.includes(project.id))
         .sort((a, b) => b.timestamp - a.timestamp);
       const schedules = data.schedules.filter((sch) => sch.keyProjectIds?.includes(project.id));
       const expanded = expandedKeyProjectIds.has(project.id);
+      const isFirst = index === 0;
+      const isLast = index === projects.length - 1;
 
       const card = document.createElement('article');
       card.className = `kp-card ${expanded ? 'kp-card--expanded' : 'kp-card--collapsed'}`;
@@ -541,6 +557,8 @@ const App = (() => {
             <span class="kp-card-chevron" aria-hidden="true">›</span>
           </button>
           <div class="kp-card-actions">
+            <button type="button" class="btn-secondary btn-kp-move-up" ${isFirst ? 'disabled' : ''}>上移</button>
+            <button type="button" class="btn-secondary btn-kp-move-down" ${isLast ? 'disabled' : ''}>下移</button>
             <button type="button" class="btn-secondary btn-kp-edit">编辑</button>
             <button type="button" class="btn-secondary btn-kp-delete">删除</button>
           </div>
@@ -587,6 +605,8 @@ const App = (() => {
       `;
 
       card.querySelector('.kp-card-toggle').addEventListener('click', () => toggleKeyProjectCard(card, project.id));
+      card.querySelector('.btn-kp-move-up').addEventListener('click', () => moveKeyProject(project.id, -1));
+      card.querySelector('.btn-kp-move-down').addEventListener('click', () => moveKeyProject(project.id, 1));
       card.querySelector('.btn-kp-edit').addEventListener('click', () => editKeyProject(project));
       card.querySelector('.btn-kp-delete').addEventListener('click', () => deleteKeyProject(project.id));
       list.appendChild(card);

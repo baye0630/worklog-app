@@ -2269,8 +2269,17 @@ body:has(#app:not(.hidden)) {
 
 .kp-card-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: calc(8px * var(--ui-scale));
   flex-shrink: 0;
+}
+
+.kp-card-actions .btn-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  border-color: var(--apple-border);
+  color: var(--apple-text-secondary);
 }
 
 .kp-card-stats {

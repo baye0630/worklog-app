@@ -758,6 +758,7 @@ const App = (() => {
 
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
+    $('#filter-date').addEventListener('change', renderTimeline);
     $('#filter-trivial').addEventListener('click', () => cycleTimelineTrivialFilter());
     $('#default-entry-type').addEventListener('change', async (e) => {
       normalizeProjectTags();
@@ -1144,6 +1145,7 @@ const App = (() => {
 
     $('#filter-type').value = '';
     if ($('#filter-project').value) $('#filter-project').value = '';
+    if ($('#filter-date').value) $('#filter-date').value = '';
 
     const tagFilter = getTimelineTagFilter();
     if (tagFilter === TRIVIAL_TAG) {
@@ -1198,7 +1200,9 @@ const App = (() => {
     if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting' || ctx.typeFilter === 'plan') return [];
     if (ctx.projectFilter) return [];
     if (ctx.tagFilter === TRIVIAL_TAG) return [];
-    return data.meetings.map(meetingToTimelineEntry);
+    return data.meetings
+      .map(meetingToTimelineEntry)
+      .filter((entry) => matchesTimelineDateFilter(entry.date, ctx.dateFilter));
   }
 
   function renderAll() {
@@ -1347,12 +1351,35 @@ const App = (() => {
     renderTimeline();
   }
 
+  function getLastWeekDateRange() {
+    const thisWeekStart = DateUtils.startOfWeek(new Date());
+    const lastWeekStart = DateUtils.addDays(thisWeekStart, -7);
+    const lastWeekEnd = DateUtils.endOfWeek(lastWeekStart);
+    return {
+      start: DateUtils.toDateKey(lastWeekStart),
+      end: DateUtils.toDateKey(lastWeekEnd),
+    };
+  }
+
+  function matchesTimelineDateFilter(dateKey, dateFilter) {
+    if (!dateFilter) return true;
+    if (dateFilter === 'today') {
+      return dateKey === DateUtils.toDateKey(new Date());
+    }
+    if (dateFilter === 'exclude-last-week') {
+      const { start, end } = getLastWeekDateRange();
+      return dateKey < start || dateKey > end;
+    }
+    return true;
+  }
+
   function getTimelineFilterContext() {
     const typeFilter = $('#filter-type').value;
     const tagFilter = getTimelineTagFilter();
     const projectFilter = $('#filter-project').value;
+    const dateFilter = $('#filter-date')?.value || '';
     const showSchedules = !projectFilter && tagFilter !== TRIVIAL_TAG;
-    return { typeFilter, tagFilter, projectFilter, showSchedules };
+    return { typeFilter, tagFilter, projectFilter, dateFilter, showSchedules };
   }
 
   function isScheduleCompleted(scheduleId, dateKey) {
@@ -1411,6 +1438,7 @@ const App = (() => {
     if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return { done, plan };
     for (let cursor = new Date(start); cursor <= end; cursor = DateUtils.addDays(cursor, 1)) {
       const dk = DateUtils.toDateKey(cursor);
+      if (ctx.dateFilter && !matchesTimelineDateFilter(dk, ctx.dateFilter)) continue;
       filterSchedulesForTimeline(dk, ctx).forEach((s) => {
         if (isScheduleCompleted(s.id, dk)) done += 1;
         else plan += 1;
@@ -1430,6 +1458,7 @@ const App = (() => {
     if (includeSchedules) {
       for (let cursor = end; cursor >= start; cursor = DateUtils.addDays(cursor, -1)) {
         const dk = DateUtils.toDateKey(cursor);
+        if (ctx.dateFilter && !matchesTimelineDateFilter(dk, ctx.dateFilter)) continue;
         if (keys.has(dk)) continue;
         if (filterSchedulesForTimeline(dk, ctx).length) {
           keys.add(dk);
@@ -1437,7 +1466,9 @@ const App = (() => {
       }
     }
 
-    return [...keys].sort((a, b) => b.localeCompare(a));
+    const dates = [...keys].sort((a, b) => b.localeCompare(a));
+    if (!ctx.dateFilter) return dates;
+    return dates.filter((dk) => matchesTimelineDateFilter(dk, ctx.dateFilter));
   }
 
   function readScheduleWeekRange() {
@@ -1531,6 +1562,9 @@ const App = (() => {
     if (ctx.projectFilter) filtered = filtered.filter((l) => l.project === ctx.projectFilter);
     if (ctx.tagFilter === TRIVIAL_TAG) filtered = filtered.filter((l) => isTrivialLog(l));
     if (ctx.tagFilter === 'exclude-trivial') filtered = filtered.filter((l) => !isTrivialLog(l));
+    if (ctx.dateFilter) {
+      filtered = filtered.filter((l) => matchesTimelineDateFilter(l.date, ctx.dateFilter));
+    }
     return filtered;
   }
 

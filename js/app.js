@@ -1458,9 +1458,12 @@ const App = (() => {
 
     const statChip = (type, label, count) => {
       const active = typeFilter === type ? ' stat-filter--active' : '';
-      return `<button type="button" class="stat-item stat-filter stat-${type}${active}" data-filter-type="${type}">${label} ${count}</button>`;
+      const typeClass = type ? `stat-${type}` : 'stat-all';
+      return `<button type="button" class="stat-item stat-filter ${typeClass}${active}" data-filter-type="${type}">${label} ${count}</button>`;
     };
+    const allCount = headerStats.done + headerStats.doing + headerStats.plan;
     $('#timeline-stats').innerHTML =
+      statChip('', '全部', allCount) +
       statChip('done', '已完成', headerStats.done) +
       statChip('doing', '进行中', headerStats.doing) +
       statChip('plan', '计划', headerStats.plan);

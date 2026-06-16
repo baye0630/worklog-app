@@ -646,6 +646,10 @@ body:has(#app:not(.hidden)) {
   font-weight: 600;
 }
 
+.stat-all {
+  color: var(--apple-text);
+}
+
 .stat-done {
   color: var(--type-done);
 }

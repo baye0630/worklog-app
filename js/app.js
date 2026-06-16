@@ -1121,7 +1121,7 @@ const App = (() => {
     }
     if (view === 'timeline') {
       renderTimeline();
-      requestAnimationFrame(() => scrollTimelineToToday(false));
+      requestAnimationFrame(resetMainScroll);
     }
   }
 
@@ -1291,6 +1291,11 @@ const App = (() => {
     if (currentView === 'calendar') renderCalendar();
     if (currentView === 'schedules') renderScheduleList();
     if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  function resetMainScroll() {
+    const main = $('.main');
+    if (main) main.scrollTop = 0;
   }
 
   function scrollTimelineToToday(smooth = true) {

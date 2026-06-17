@@ -1316,7 +1316,7 @@ const App = (() => {
     resetEntryForm();
     $('#entry-dialog').close();
     renderTimeline();
-    scrollTimelineToToday(false);
+    requestAnimationFrame(resetMainScroll);
     if (currentView === 'calendar') renderCalendar();
     if (currentView === 'schedules') renderScheduleList();
     if (currentView === 'key-projects') renderKeyProjects();

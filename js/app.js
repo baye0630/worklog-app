@@ -1867,6 +1867,36 @@ const App = (() => {
         completeDoingLog(log.id);
       });
     }
+    if (log.type === 'waiting') {
+      const badge = li.querySelector('.type-waiting');
+      li.classList.add('log-item--quick-complete');
+      badge.classList.add('log-quick-complete-trigger');
+      badge.setAttribute('role', 'button');
+      badge.setAttribute('tabindex', '0');
+      badge.setAttribute('title', '点击标记为已完成');
+      badge.setAttribute('aria-label', '点击标记为已完成');
+      badge.addEventListener('click', () => completeWaitingLog(log.id));
+      badge.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        completeWaitingLog(log.id);
+      });
+    }
+    if (log.type === 'plan') {
+      const badge = li.querySelector('.type-plan');
+      li.classList.add('log-item--quick-start');
+      badge.classList.add('log-quick-start-trigger');
+      badge.setAttribute('role', 'button');
+      badge.setAttribute('tabindex', '0');
+      badge.setAttribute('title', '点击标记为进行中');
+      badge.setAttribute('aria-label', '点击标记为进行中');
+      badge.addEventListener('click', () => startPlanLog(log.id));
+      badge.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        startPlanLog(log.id);
+      });
+    }
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
     return li;
@@ -1937,6 +1967,24 @@ const App = (() => {
   async function completeDoingLog(id) {
     const log = data.logs.find((l) => l.id === id);
     if (!log || log.type !== 'doing') return;
+    log.type = 'done';
+    await persist();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function startPlanLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'plan') return;
+    log.type = 'doing';
+    await persist();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function completeWaitingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'waiting') return;
     log.type = 'done';
     await persist();
     renderTimeline();

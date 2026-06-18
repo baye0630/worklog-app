@@ -1150,6 +1150,11 @@ const App = (() => {
       e.preventDefault();
       await saveEditLog();
     });
+    $('#edit-form').addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      e.preventDefault();
+      e.currentTarget.requestSubmit();
+    });
     $('#edit-cancel').addEventListener('click', () => $('#edit-dialog').close());
   }
 

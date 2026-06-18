@@ -194,6 +194,7 @@ const App = (() => {
     initScheduleColorPicker();
     normalizeProjectTags();
     refreshProjectSelects();
+    refreshKeyProjectDefaultTagSelect();
     renderKeyProjectPickers();
     setScheduleWeekDefaults();
     setDateInputsToday();
@@ -275,7 +276,7 @@ const App = (() => {
     $('#entry-deadline').value = '';
     $('#entry-tag-trivial').checked = false;
     $('#entry-type').value = getDefaultEntryType();
-    renderKeyProjectPicker($('#entry-key-projects'), []);
+    renderKeyProjectPicker($('#entry-key-projects'), [], { projectSelect: $('#entry-project') });
     setDateInputsToday();
   }
 
@@ -575,6 +576,9 @@ const App = (() => {
     data.schedules.forEach((sch) => {
       if (!Array.isArray(sch.keyProjectIds)) sch.keyProjectIds = [];
     });
+    getKeyProjects().forEach((project) => {
+      if (typeof project.defaultProjectTag !== 'string') project.defaultProjectTag = '';
+    });
   }
 
   function getKeyProjects() {
@@ -594,12 +598,24 @@ const App = (() => {
   }
 
   function renderKeyProjectPickers(selected = {}) {
-    renderKeyProjectPicker($('#entry-key-projects'), selected.entry || []);
-    renderKeyProjectPicker($('#edit-key-projects'), selected.edit || []);
+    renderKeyProjectPicker($('#entry-key-projects'), selected.entry || [], { projectSelect: $('#entry-project') });
+    renderKeyProjectPicker($('#edit-key-projects'), selected.edit || [], { projectSelect: $('#edit-project') });
     renderKeyProjectPicker($('#sch-key-projects'), selected.schedule || []);
   }
 
-  function renderKeyProjectPicker(container, selectedIds = []) {
+  function bindKeyProjectPickerAutoTag(container, projectSelect) {
+    if (!container || !projectSelect) return;
+    container.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (!cb.checked) return;
+        const project = getKeyProjectById(cb.value);
+        if (!project?.defaultProjectTag) return;
+        fillProjectSelect(projectSelect, { emptyLabel: '无', selected: project.defaultProjectTag });
+      });
+    });
+  }
+
+  function renderKeyProjectPicker(container, selectedIds = [], { projectSelect = null } = {}) {
     if (!container) return;
     const projects = getKeyProjects();
     if (!projects.length) {
@@ -618,6 +634,7 @@ const App = (() => {
         }
       )
       .join('');
+    bindKeyProjectPickerAutoTag(container, projectSelect);
   }
 
   function readKeyProjectPicker(container) {
@@ -625,10 +642,18 @@ const App = (() => {
     return [...container.querySelectorAll('input[type=checkbox]:checked')].map((cb) => cb.value);
   }
 
+  function refreshKeyProjectDefaultTagSelect(selected) {
+    fillProjectSelect($('#kp-default-tag'), {
+      emptyLabel: '无',
+      selected: selected !== undefined ? selected : $('#kp-default-tag')?.value || '',
+    });
+  }
+
   function resetKeyProjectForm() {
     $('#kp-edit-id').value = '';
     $('#kp-name').value = '';
     $('#kp-notes').value = '';
+    refreshKeyProjectDefaultTagSelect('');
     $('#kp-submit-btn').textContent = '创建项目组';
     $('#kp-cancel-edit').classList.add('hidden');
   }
@@ -639,6 +664,7 @@ const App = (() => {
     const payload = {
       name,
       notes: $('#kp-notes').value.trim(),
+      defaultProjectTag: $('#kp-default-tag').value || '',
     };
     const editId = $('#kp-edit-id').value;
     if (editId) {
@@ -662,6 +688,7 @@ const App = (() => {
     $('#kp-edit-id').value = project.id;
     $('#kp-name').value = project.name;
     $('#kp-notes').value = project.notes || '';
+    refreshKeyProjectDefaultTagSelect(project.defaultProjectTag || '');
     $('#kp-submit-btn').textContent = '保存修改';
     $('#kp-cancel-edit').classList.remove('hidden');
     switchView('key-projects');
@@ -759,6 +786,7 @@ const App = (() => {
         <div class="kp-card-stats">
           <span>录入任务 ${logs.length} 项</span>
           <span>固定日程 ${schedules.length} 项</span>
+          ${project.defaultProjectTag ? `<span>默认标签 ${escapeHtml(project.defaultProjectTag)}</span>` : ''}
         </div>
         <div class="kp-card-body">
           <section class="kp-card-section">
@@ -1289,7 +1317,11 @@ const App = (() => {
     if (view === 'calendar') renderCalendar();
     if (view === 'schedules' || view === 'settings') renderScheduleList();
     if (view === 'meetings') renderMeetingList();
-    if (view === 'key-projects') renderKeyProjects();
+    if (view === 'key-projects') {
+      refreshProjectSelects();
+      refreshKeyProjectDefaultTagSelect();
+      renderKeyProjects();
+    }
     if (view === 'settings') {
       renderProjectTagList();
       refreshProjectSelects();
@@ -2130,7 +2162,7 @@ const App = (() => {
     $('#edit-notes').value = log.notes || '';
     $('#edit-deadline').value = log.deadline || '';
     $('#edit-tag-trivial').checked = isTrivialLog(log);
-    renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || []);
+    renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || [], { projectSelect: $('#edit-project') });
     $('#edit-time').value = getLocalDatetimeInputValue(new Date(log.timestamp));
     $('#edit-dialog').showModal();
   }

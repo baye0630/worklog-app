@@ -24,6 +24,28 @@ const App = (() => {
   const TRIVIAL_TAG = '琐碎任务';
   const MEETING_TIMELINE_TAG = '会议纪要';
   const MAX_MEETING_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  const DEFAULT_ENTRY_FIELD_ORDER = [
+    'type',
+    'time',
+    'withWhom',
+    'project',
+    'purpose',
+    'notes',
+    'deadline',
+    'trivial',
+    'keyProjects',
+  ];
+  const ENTRY_FIELD_LABELS = {
+    type: '任务状态',
+    time: '记录时间',
+    withWhom: '是和谁',
+    project: '项目标签',
+    purpose: '任务目的',
+    notes: '备注',
+    deadline: 'DDL 截止日期',
+    trivial: '琐碎任务',
+    keyProjects: '关键项目',
+  };
   const DEFAULT_DATA = () => ({
     logs: [],
     schedules: [],
@@ -39,6 +61,17 @@ const App = (() => {
       trivialFilterMode: 'all',
       defaultEntryType: 'done',
       waitingFeatureEnabled: false,
+      entryFieldOrder: [
+        'type',
+        'time',
+        'withWhom',
+        'project',
+        'purpose',
+        'notes',
+        'deadline',
+        'trivial',
+        'keyProjects',
+      ],
     },
   });
 
@@ -171,6 +204,8 @@ const App = (() => {
     updateWaitingFeatureControls();
     bindEvents();
     bindDatetimeQuickActions();
+    normalizeEntryFieldOrder();
+    applyEntryFieldOrder();
     switchView('timeline');
     renderAll();
     scrollTimelineToToday(false);
@@ -272,6 +307,7 @@ const App = (() => {
   function openEntryDialog() {
     resetEntryForm();
     refreshProjectSelects();
+    applyEntryFieldOrder();
     $('#entry-dialog').showModal();
     $('#entry-content').focus();
   }
@@ -307,7 +343,93 @@ const App = (() => {
       data.settings.defaultEntryType = 'done';
       changed = true;
     }
+    if (normalizeEntryFieldOrder()) changed = true;
     return changed;
+  }
+
+  function getDefaultEntryFieldOrder() {
+    return [...DEFAULT_ENTRY_FIELD_ORDER];
+  }
+
+  function normalizeEntryFieldOrder() {
+    if (!data?.settings) return false;
+    const defaults = getDefaultEntryFieldOrder();
+    let order = data.settings.entryFieldOrder;
+    if (!Array.isArray(order)) {
+      data.settings.entryFieldOrder = defaults;
+      return true;
+    }
+    const normalized = order.filter((id) => defaults.includes(id));
+    defaults.forEach((id) => {
+      if (!normalized.includes(id)) normalized.push(id);
+    });
+    const changed =
+      normalized.length !== order.length ||
+      normalized.some((id, index) => id !== order[index]);
+    if (changed) data.settings.entryFieldOrder = normalized;
+    return changed;
+  }
+
+  function getEntryFieldOrder() {
+    normalizeEntryFieldOrder();
+    return data.settings.entryFieldOrder;
+  }
+
+  function applyEntryFieldOrder() {
+    const host = $('#entry-fields-host');
+    if (!host) return;
+    const blocks = new Map();
+    host.querySelectorAll('[data-entry-field]').forEach((el) => {
+      blocks.set(el.dataset.entryField, el);
+    });
+    getEntryFieldOrder().forEach((id) => {
+      const el = blocks.get(id);
+      if (el) host.appendChild(el);
+    });
+  }
+
+  async function moveEntryField(fieldId, direction) {
+    const order = getEntryFieldOrder();
+    const index = order.indexOf(fieldId);
+    if (index < 0) return;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= order.length) return;
+    const [item] = order.splice(index, 1);
+    order.splice(nextIndex, 0, item);
+    data.settings.entryFieldOrder = order;
+    await persist();
+    applyEntryFieldOrder();
+    renderEntryFieldOrderList();
+  }
+
+  async function resetEntryFieldOrder() {
+    data.settings.entryFieldOrder = getDefaultEntryFieldOrder();
+    await persist();
+    applyEntryFieldOrder();
+    renderEntryFieldOrderList();
+  }
+
+  function renderEntryFieldOrderList() {
+    const list = $('#entry-field-order-list');
+    if (!list) return;
+    const order = getEntryFieldOrder();
+    list.innerHTML = '';
+    order.forEach((fieldId, index) => {
+      const li = document.createElement('li');
+      li.className = 'entry-field-order-item';
+      const isFirst = index === 0;
+      const isLast = index === order.length - 1;
+      li.innerHTML = `
+        <span class="entry-field-order-name">${escapeHtml(ENTRY_FIELD_LABELS[fieldId] || fieldId)}</span>
+        <div class="entry-field-order-actions">
+          <button type="button" class="btn-secondary btn-entry-field-move-up" ${isFirst ? 'disabled' : ''}>上移</button>
+          <button type="button" class="btn-secondary btn-entry-field-move-down" ${isLast ? 'disabled' : ''}>下移</button>
+        </div>
+      `;
+      li.querySelector('.btn-entry-field-move-up').addEventListener('click', () => moveEntryField(fieldId, -1));
+      li.querySelector('.btn-entry-field-move-down').addEventListener('click', () => moveEntryField(fieldId, 1));
+      list.appendChild(li);
+    });
   }
 
   function isWaitingFeatureEnabled() {
@@ -801,6 +923,7 @@ const App = (() => {
       data.settings.defaultEntryType = e.target.value;
       await persist();
     });
+    $('#btn-reset-entry-field-order').addEventListener('click', resetEntryFieldOrder);
     $('#setting-enable-waiting').addEventListener('change', async (e) => {
       normalizeProjectTags();
       data.settings.waitingFeatureEnabled = e.target.checked;
@@ -1172,6 +1295,7 @@ const App = (() => {
       renderProjectTagList();
       refreshProjectSelects();
       updateDefaultEntryTypeSelect();
+      renderEntryFieldOrderList();
     }
     if (view === 'summary') {
       updateSummaryDateNav();

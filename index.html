@@ -394,6 +394,11 @@
               <option value="plan">计划（待办）</option>
             </select>
           </div>
+          <div class="entry-field-order-settings">
+            <p class="hint">调整快速录入弹窗中各字段的显示顺序；正文内容始终保持在最上方。</p>
+            <ul id="entry-field-order-list" class="entry-field-order-list"></ul>
+            <button type="button" id="btn-reset-entry-field-order" class="btn-secondary">恢复默认顺序</button>
+          </div>
         </div>
 
         <div class="settings-block">
@@ -426,33 +431,51 @@
         <button type="button" id="entry-close" class="btn-icon entry-dialog-close" aria-label="关闭">×</button>
       </div>
       <textarea id="entry-content" rows="3" placeholder="记录你在做什么 / 完成了什么…" required></textarea>
-      <select id="entry-type">
-        <option value="done">已完成</option>
-        <option value="doing">进行中</option>
-        <option value="waiting">等结果</option>
-        <option value="plan">计划（待办）</option>
-      </select>
-      <input type="datetime-local" id="entry-time" />
-      <div class="datetime-quick-actions">
-        <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="today">今天</button>
-        <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="now">现在</button>
-      </div>
-      <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
-      <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
-      <select id="entry-project"></select>
-      <label class="entry-field-label" for="entry-purpose">任务目的（可选）</label>
-      <input type="text" id="entry-purpose" placeholder="为什么要做这件事" />
-      <label class="entry-field-label" for="entry-notes">备注（可选）</label>
-      <textarea id="entry-notes" rows="2" placeholder="补充说明、链接等"></textarea>
-      <label class="entry-field-label" for="entry-deadline">DDL 截止日期（可选）</label>
-      <input type="date" id="entry-deadline" />
-      <label class="entry-tag-check checkbox-label">
-        <input type="checkbox" id="entry-tag-trivial" />
-        琐碎任务
-      </label>
-      <div class="entry-field">
-        <span class="entry-field-label">关键项目（可选，可多选）</span>
-        <div id="entry-key-projects" class="kp-picker"></div>
+      <div id="entry-fields-host">
+        <div class="entry-field-block" data-entry-field="type">
+          <select id="entry-type">
+            <option value="done">已完成</option>
+            <option value="doing">进行中</option>
+            <option value="waiting">等结果</option>
+            <option value="plan">计划（待办）</option>
+          </select>
+        </div>
+        <div class="entry-field-block" data-entry-field="time">
+          <input type="datetime-local" id="entry-time" />
+          <div class="datetime-quick-actions">
+            <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="today">今天</button>
+            <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="now">现在</button>
+          </div>
+        </div>
+        <div class="entry-field-block" data-entry-field="withWhom">
+          <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
+        </div>
+        <div class="entry-field-block" data-entry-field="project">
+          <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
+          <select id="entry-project"></select>
+        </div>
+        <div class="entry-field-block" data-entry-field="purpose">
+          <label class="entry-field-label" for="entry-purpose">任务目的（可选）</label>
+          <input type="text" id="entry-purpose" placeholder="为什么要做这件事" />
+        </div>
+        <div class="entry-field-block" data-entry-field="notes">
+          <label class="entry-field-label" for="entry-notes">备注（可选）</label>
+          <textarea id="entry-notes" rows="2" placeholder="补充说明、链接等"></textarea>
+        </div>
+        <div class="entry-field-block" data-entry-field="deadline">
+          <label class="entry-field-label" for="entry-deadline">DDL 截止日期（可选）</label>
+          <input type="date" id="entry-deadline" />
+        </div>
+        <div class="entry-field-block" data-entry-field="trivial">
+          <label class="entry-tag-check checkbox-label">
+            <input type="checkbox" id="entry-tag-trivial" />
+            琐碎任务
+          </label>
+        </div>
+        <div class="entry-field-block entry-field" data-entry-field="keyProjects">
+          <span class="entry-field-label">关键项目（可选，可多选）</span>
+          <div id="entry-key-projects" class="kp-picker"></div>
+        </div>
       </div>
       <p class="entry-hint">Ctrl + Enter 提交</p>
       <div class="dialog-actions">

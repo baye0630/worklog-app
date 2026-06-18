@@ -2494,6 +2494,45 @@ body:has(#app:not(.hidden)) {
   border-bottom: none;
 }
 
+.entry-field-order-settings {
+  margin-top: calc(20px * var(--ui-scale));
+}
+
+.entry-field-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 calc(12px * var(--ui-scale));
+}
+
+.entry-field-order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) 0;
+  border-bottom: 1px solid var(--apple-border);
+  font-size: var(--fs-body);
+}
+
+.entry-field-order-item:last-child {
+  border-bottom: none;
+}
+
+.entry-field-order-name {
+  color: var(--apple-text);
+}
+
+.entry-field-order-actions {
+  display: flex;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.entry-field-order-actions .btn-secondary {
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--fs-sm);
+}
+
 .project-tag-add {
   display: flex;
   flex-wrap: wrap;
@@ -2838,6 +2877,20 @@ body:has(#app:not(.hidden)) {
 
 #entry-dialog .entry-field {
   margin-bottom: calc(12px * var(--ui-scale));
+}
+
+#entry-dialog .entry-field-block > :last-child {
+  margin-bottom: 0;
+}
+
+#entry-dialog .entry-field-block textarea,
+#entry-dialog .entry-field-block input:not([type='checkbox']),
+#entry-dialog .entry-field-block select {
+  margin-bottom: calc(10px * var(--ui-scale));
+}
+
+#entry-dialog .entry-field-block .datetime-quick-actions {
+  margin-bottom: calc(10px * var(--ui-scale));
 }
 
 #entry-dialog .entry-field-label {

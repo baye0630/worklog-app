@@ -1115,6 +1115,15 @@ body:has(#app:not(.hidden)) {
   outline-offset: calc(3px * var(--ui-scale));
 }
 
+.log-quick-revert-trigger {
+  cursor: pointer;
+}
+
+.log-quick-revert-trigger:hover {
+  background: rgba(255, 149, 0, 0.12);
+  color: #c93400;
+}
+
 .log-item--meeting {
   cursor: pointer;
   border-left: calc(3px * var(--ui-scale)) solid var(--apple-link);

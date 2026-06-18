@@ -2023,6 +2023,33 @@ const App = (() => {
     `;
   }
 
+  function setupStatusBadge(badge, li, { onClick, onRevert, clickLabel, revertLabel, itemClass, triggerClass }) {
+    if (!badge) return;
+    if (itemClass) li.classList.add(itemClass);
+    badge.classList.add(triggerClass || 'log-status-quick-trigger');
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('tabindex', '0');
+    const hints = [];
+    if (onClick && clickLabel) hints.push(`左键${clickLabel}`);
+    if (onRevert && revertLabel) hints.push(`右键${revertLabel}`);
+    badge.setAttribute('title', hints.join('；'));
+    badge.setAttribute('aria-label', hints.join('；'));
+    if (onClick) {
+      badge.addEventListener('click', () => onClick());
+      badge.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        onClick();
+      });
+    }
+    if (onRevert) {
+      badge.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        onRevert();
+      });
+    }
+  }
+
   function createLogItem(log, forcedView = '') {
     const view = forcedView || getTimelineView();
     const li = document.createElement('li');
@@ -2032,49 +2059,36 @@ const App = (() => {
     li.querySelectorAll('.log-link').forEach((link) => {
       link.addEventListener('click', (e) => e.stopPropagation());
     });
-    if (log.type === 'doing') {
-      const badge = li.querySelector('.type-doing');
-      li.classList.add('log-item--quick-complete');
-      badge.classList.add('log-quick-complete-trigger');
-      badge.setAttribute('role', 'button');
-      badge.setAttribute('tabindex', '0');
-      badge.setAttribute('title', '点击标记为已完成');
-      badge.setAttribute('aria-label', '点击标记为已完成');
-      badge.addEventListener('click', () => completeDoingLog(log.id));
-      badge.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        completeDoingLog(log.id);
+    if (log.type === 'done') {
+      setupStatusBadge(li.querySelector('.type-done'), li, {
+        onRevert: () => revertDoneLog(log.id),
+        revertLabel: '回到进行中',
+        triggerClass: 'log-quick-revert-trigger',
       });
-    }
-    if (log.type === 'waiting') {
-      const badge = li.querySelector('.type-waiting');
-      li.classList.add('log-item--quick-complete');
-      badge.classList.add('log-quick-complete-trigger');
-      badge.setAttribute('role', 'button');
-      badge.setAttribute('tabindex', '0');
-      badge.setAttribute('title', '点击标记为已完成');
-      badge.setAttribute('aria-label', '点击标记为已完成');
-      badge.addEventListener('click', () => completeWaitingLog(log.id));
-      badge.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        completeWaitingLog(log.id);
+    } else if (log.type === 'doing') {
+      setupStatusBadge(li.querySelector('.type-doing'), li, {
+        onClick: () => completeDoingLog(log.id),
+        onRevert: () => revertDoingLog(log.id),
+        clickLabel: '标记为已完成',
+        revertLabel: '回到计划',
+        itemClass: 'log-item--quick-complete',
+        triggerClass: 'log-quick-complete-trigger',
       });
-    }
-    if (log.type === 'plan') {
-      const badge = li.querySelector('.type-plan');
-      li.classList.add('log-item--quick-start');
-      badge.classList.add('log-quick-start-trigger');
-      badge.setAttribute('role', 'button');
-      badge.setAttribute('tabindex', '0');
-      badge.setAttribute('title', '点击标记为进行中');
-      badge.setAttribute('aria-label', '点击标记为进行中');
-      badge.addEventListener('click', () => startPlanLog(log.id));
-      badge.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        startPlanLog(log.id);
+    } else if (log.type === 'waiting') {
+      setupStatusBadge(li.querySelector('.type-waiting'), li, {
+        onClick: () => completeWaitingLog(log.id),
+        onRevert: () => revertWaitingLog(log.id),
+        clickLabel: '标记为已完成',
+        revertLabel: '回到进行中',
+        itemClass: 'log-item--quick-complete',
+        triggerClass: 'log-quick-complete-trigger',
+      });
+    } else if (log.type === 'plan') {
+      setupStatusBadge(li.querySelector('.type-plan'), li, {
+        onClick: () => startPlanLog(log.id),
+        clickLabel: '标记为进行中',
+        itemClass: 'log-item--quick-start',
+        triggerClass: 'log-quick-start-trigger',
       });
     }
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
@@ -2164,6 +2178,33 @@ const App = (() => {
     const log = data.logs.find((l) => l.id === id);
     if (!log || log.type !== 'waiting') return;
     log.type = 'done';
+    await persist();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function revertDoneLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'done') return;
+    log.type = 'doing';
+    await persist();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function revertDoingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'doing') return;
+    log.type = 'plan';
+    await persist();
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+  }
+
+  async function revertWaitingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'waiting') return;
+    log.type = 'doing';
     await persist();
     renderTimeline();
     if (currentView === 'key-projects') renderKeyProjects();

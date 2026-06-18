@@ -2912,8 +2912,20 @@ body:has(#app:not(.hidden)) {
   margin-bottom: calc(10px * var(--ui-scale));
 }
 
-#entry-dialog .entry-field-label {
+#entry-dialog .entry-field-label,
+#edit-dialog .entry-field-label {
+  display: block;
   margin-bottom: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(6px * var(--ui-scale))
+    calc(13px * var(--ui-scale));
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--apple-text);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  background: var(--apple-bg-alt);
+  border-left: calc(3px * var(--ui-scale)) solid var(--apple-blue);
+  border-radius: 0 var(--apple-radius-sm) var(--apple-radius-sm) 0;
 }
 
 #entry-dialog .dialog-actions {

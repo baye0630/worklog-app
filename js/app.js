@@ -23,7 +23,33 @@ const App = (() => {
   ];
   const TRIVIAL_TAG = '琐碎任务';
   const MEETING_TIMELINE_TAG = '会议纪要';
+  const LOG_TYPES = ['done', 'doing', 'waiting', 'plan', 'far'];
   const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  const MAX_MEETING_ATTACHMENT_BYTES = MAX_ATTACHMENT_BYTES;
+  const DEFAULT_ENTRY_FIELD_ORDER = [
+    'type',
+    'time',
+    'withWhom',
+    'project',
+    'purpose',
+    'notes',
+    'attachments',
+    'deadline',
+    'trivial',
+    'keyProjects',
+  ];
+  const ENTRY_FIELD_LABELS = {
+    type: '任务状态',
+    time: '记录时间',
+    withWhom: '是和谁',
+    project: '项目标签',
+    purpose: '任务目的',
+    notes: '备注',
+    attachments: '附件',
+    deadline: 'DDL 截止日期',
+    trivial: '琐碎任务',
+    keyProjects: '关键项目',
+  };
   const DEFAULT_DATA = () => ({
     logs: [],
     schedules: [],
@@ -32,7 +58,26 @@ const App = (() => {
     keyProjects: [],
     dailySummaries: {},
     weeklySummaries: {},
-    settings: { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' },
+    settings: {
+      weekStartDay: 'monday',
+      projectTags: [],
+      timelineView: 'detailed',
+      trivialFilterMode: 'all',
+      defaultEntryType: 'done',
+      waitingFeatureEnabled: false,
+      entryFieldOrder: [
+        'type',
+        'time',
+        'withWhom',
+        'project',
+        'purpose',
+        'notes',
+        'attachments',
+        'deadline',
+        'trivial',
+        'keyProjects',
+      ],
+    },
   });
 
   let password = '';
@@ -157,6 +202,7 @@ const App = (() => {
     initScheduleColorPicker();
     normalizeProjectTags();
     refreshProjectSelects();
+    refreshKeyProjectDefaultTagSelect();
     renderKeyProjectPickers();
     setScheduleWeekDefaults();
     setDateInputsToday();
@@ -164,7 +210,11 @@ const App = (() => {
     renderMeetingAttachmentsForm();
     updateQuickEntryShortcutHint();
     updateTrivialFilterSwitch();
+    updateWaitingFeatureControls();
     bindEvents();
+    bindDatetimeQuickActions();
+    normalizeEntryFieldOrder();
+    applyEntryFieldOrder();
     switchView('timeline');
     renderAll();
     scrollTimelineToToday(false);
@@ -173,9 +223,44 @@ const App = (() => {
   function setDateInputsToday() {
     const today = DateUtils.toDateKey(new Date());
     $('#summary-date').value = today;
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    $('#entry-time').value = now.toISOString().slice(0, 16);
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
+    $('#summary-week-start').value = DateUtils.toDateKey(weekStart);
+    $('#summary-week-end').value = DateUtils.toDateKey(weekEnd);
+    setDatetimeInputNow($('#entry-time'));
+  }
+
+  function getLocalDatetimeInputValue(d = new Date()) {
+    const dt = new Date(d);
+    dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
+    return dt.toISOString().slice(0, 16);
+  }
+
+  function setDatetimeInputToday(inputEl) {
+    if (!inputEl) return;
+    const today = DateUtils.toDateKey(new Date());
+    if (inputEl.value) {
+      const timePart = inputEl.value.split('T')[1] || getLocalDatetimeInputValue().split('T')[1];
+      inputEl.value = `${today}T${timePart}`;
+    } else {
+      inputEl.value = getLocalDatetimeInputValue();
+    }
+  }
+
+  function setDatetimeInputNow(inputEl) {
+    if (!inputEl) return;
+    inputEl.value = getLocalDatetimeInputValue(new Date());
+  }
+
+  function bindDatetimeQuickActions() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-datetime-action]');
+      if (!btn) return;
+      const input = document.getElementById(btn.dataset.datetimeTarget);
+      if (!input) return;
+      if (btn.dataset.datetimeAction === 'today') setDatetimeInputToday(input);
+      else if (btn.dataset.datetimeAction === 'now') setDatetimeInputNow(input);
+    });
   }
 
   function isTrivialLog(log) {
@@ -198,8 +283,8 @@ const App = (() => {
     $('#entry-notes').value = '';
     $('#entry-deadline').value = '';
     $('#entry-tag-trivial').checked = false;
-    $('#entry-type').value = 'done';
-    renderKeyProjectPicker($('#entry-key-projects'), []);
+    $('#entry-type').value = getDefaultEntryType();
+    renderKeyProjectPicker($('#entry-key-projects'), [], { projectSelect: $('#entry-project') });
     entryFormAttachments = [];
     renderEntryAttachmentsForm();
     setDateInputsToday();
@@ -233,6 +318,7 @@ const App = (() => {
   function openEntryDialog() {
     resetEntryForm();
     refreshProjectSelects();
+    applyEntryFieldOrder();
     $('#entry-dialog').showModal();
     $('#entry-content').focus();
   }
@@ -240,7 +326,7 @@ const App = (() => {
   function normalizeProjectTags() {
     if (!data) return false;
     if (!data.settings) {
-      data.settings = { weekStartDay: 'monday', projectTags: [], timelineView: 'detailed', trivialFilterMode: 'all' };
+      data.settings = DEFAULT_DATA().settings;
       return true;
     }
     let changed = false;
@@ -256,7 +342,144 @@ const App = (() => {
       data.settings.trivialFilterMode = 'all';
       changed = true;
     }
+    if (typeof data.settings.waitingFeatureEnabled !== 'boolean') {
+      data.settings.waitingFeatureEnabled = false;
+      changed = true;
+    }
+    if (!LOG_TYPES.includes(data.settings.defaultEntryType)) {
+      data.settings.defaultEntryType = 'done';
+      changed = true;
+    }
+    if (!data.settings.waitingFeatureEnabled && data.settings.defaultEntryType === 'waiting') {
+      data.settings.defaultEntryType = 'done';
+      changed = true;
+    }
+    if (normalizeEntryFieldOrder()) changed = true;
     return changed;
+  }
+
+  function getDefaultEntryFieldOrder() {
+    return [...DEFAULT_ENTRY_FIELD_ORDER];
+  }
+
+  function normalizeEntryFieldOrder() {
+    if (!data?.settings) return false;
+    const defaults = getDefaultEntryFieldOrder();
+    let order = data.settings.entryFieldOrder;
+    if (!Array.isArray(order)) {
+      data.settings.entryFieldOrder = defaults;
+      return true;
+    }
+    const normalized = order.filter((id) => defaults.includes(id));
+    defaults.forEach((id) => {
+      if (!normalized.includes(id)) normalized.push(id);
+    });
+    const changed =
+      normalized.length !== order.length ||
+      normalized.some((id, index) => id !== order[index]);
+    if (changed) data.settings.entryFieldOrder = normalized;
+    return changed;
+  }
+
+  function getEntryFieldOrder() {
+    normalizeEntryFieldOrder();
+    return data.settings.entryFieldOrder;
+  }
+
+  function applyEntryFieldOrder() {
+    const host = $('#entry-fields-host');
+    if (!host) return;
+    const blocks = new Map();
+    host.querySelectorAll('[data-entry-field]').forEach((el) => {
+      blocks.set(el.dataset.entryField, el);
+    });
+    getEntryFieldOrder().forEach((id) => {
+      const el = blocks.get(id);
+      if (el) host.appendChild(el);
+    });
+  }
+
+  async function moveEntryField(fieldId, direction) {
+    const order = getEntryFieldOrder();
+    const index = order.indexOf(fieldId);
+    if (index < 0) return;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= order.length) return;
+    const [item] = order.splice(index, 1);
+    order.splice(nextIndex, 0, item);
+    data.settings.entryFieldOrder = order;
+    await persist();
+    applyEntryFieldOrder();
+    renderEntryFieldOrderList();
+  }
+
+  async function resetEntryFieldOrder() {
+    data.settings.entryFieldOrder = getDefaultEntryFieldOrder();
+    await persist();
+    applyEntryFieldOrder();
+    renderEntryFieldOrderList();
+  }
+
+  function renderEntryFieldOrderList() {
+    const list = $('#entry-field-order-list');
+    if (!list) return;
+    const order = getEntryFieldOrder();
+    list.innerHTML = '';
+    order.forEach((fieldId, index) => {
+      const li = document.createElement('li');
+      li.className = 'entry-field-order-item';
+      const isFirst = index === 0;
+      const isLast = index === order.length - 1;
+      li.innerHTML = `
+        <span class="entry-field-order-name">${escapeHtml(ENTRY_FIELD_LABELS[fieldId] || fieldId)}</span>
+        <div class="entry-field-order-actions">
+          <button type="button" class="btn-secondary btn-entry-field-move-up" ${isFirst ? 'disabled' : ''}>上移</button>
+          <button type="button" class="btn-secondary btn-entry-field-move-down" ${isLast ? 'disabled' : ''}>下移</button>
+        </div>
+      `;
+      li.querySelector('.btn-entry-field-move-up').addEventListener('click', () => moveEntryField(fieldId, -1));
+      li.querySelector('.btn-entry-field-move-down').addEventListener('click', () => moveEntryField(fieldId, 1));
+      list.appendChild(li);
+    });
+  }
+
+  function isWaitingFeatureEnabled() {
+    return data?.settings?.waitingFeatureEnabled === true;
+  }
+
+  function getDefaultEntryType() {
+    return LOG_TYPES.includes(data?.settings?.defaultEntryType) ? data.settings.defaultEntryType : 'done';
+  }
+
+  function excludeFarLogs(logs) {
+    return logs.filter((l) => l.type !== 'far');
+  }
+
+  function setWaitingOptionVisibility(select, enabled) {
+    if (!select) return;
+    const option = [...select.options].find((o) => o.value === 'waiting');
+    if (!option) return;
+    option.hidden = !enabled;
+    option.disabled = !enabled;
+    if (!enabled && select.value === 'waiting') {
+      select.value = select.id === 'filter-type' ? '' : 'done';
+    }
+  }
+
+  function updateWaitingFeatureControls() {
+    const enabled = isWaitingFeatureEnabled();
+    const checkbox = $('#setting-enable-waiting');
+    if (checkbox) checkbox.checked = enabled;
+    ['#filter-type', '#entry-type', '#edit-type', '#default-entry-type'].forEach((sel) => {
+      setWaitingOptionVisibility($(sel), enabled);
+    });
+  }
+
+  function updateDefaultEntryTypeSelect() {
+    const select = $('#default-entry-type');
+    if (!select) return;
+    select.value = getDefaultEntryType();
+    updateWaitingFeatureControls();
   }
 
   function getTimelineView() {
@@ -286,9 +509,9 @@ const App = (() => {
     return [...orphans].sort((a, b) => a.localeCompare(b, 'zh-CN'));
   }
 
-  function fillProjectSelect(el, { emptyLabel = '无', selected = '' } = {}) {
+  function fillProjectSelect(el, { emptyLabel = '无', selected } = {}) {
     if (!el) return;
-    const cur = selected || el.value;
+    const cur = selected !== undefined ? selected : el.value;
     el.innerHTML = `<option value="">${emptyLabel}</option>`;
     getProjectTags().forEach((tag) => {
       const opt = document.createElement('option');
@@ -302,13 +525,17 @@ const App = (() => {
       opt.textContent = `${tag}（已移除）`;
       el.appendChild(opt);
     });
-    if ([...el.options].some((o) => o.value === cur)) el.value = cur;
+    el.value = [...el.options].some((o) => o.value === cur) ? cur : '';
   }
 
   function refreshProjectSelects() {
     fillProjectSelect($('#entry-project'), { emptyLabel: '无' });
     fillProjectSelect($('#edit-project'), { emptyLabel: '无' });
     fillProjectSelect($('#filter-project'), { emptyLabel: '全部' });
+    fillProjectSelect($('#far-filter-project'), {
+      emptyLabel: '全部',
+      selected: $('#far-filter-project')?.value || '',
+    });
   }
 
   function renderProjectTagList() {
@@ -365,6 +592,9 @@ const App = (() => {
     data.schedules.forEach((sch) => {
       if (!Array.isArray(sch.keyProjectIds)) sch.keyProjectIds = [];
     });
+    getKeyProjects().forEach((project) => {
+      if (typeof project.defaultProjectTag !== 'string') project.defaultProjectTag = '';
+    });
   }
 
   function getKeyProjects() {
@@ -384,12 +614,24 @@ const App = (() => {
   }
 
   function renderKeyProjectPickers(selected = {}) {
-    renderKeyProjectPicker($('#entry-key-projects'), selected.entry || []);
-    renderKeyProjectPicker($('#edit-key-projects'), selected.edit || []);
+    renderKeyProjectPicker($('#entry-key-projects'), selected.entry || [], { projectSelect: $('#entry-project') });
+    renderKeyProjectPicker($('#edit-key-projects'), selected.edit || [], { projectSelect: $('#edit-project') });
     renderKeyProjectPicker($('#sch-key-projects'), selected.schedule || []);
   }
 
-  function renderKeyProjectPicker(container, selectedIds = []) {
+  function bindKeyProjectPickerAutoTag(container, projectSelect) {
+    if (!container || !projectSelect) return;
+    container.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (!cb.checked) return;
+        const project = getKeyProjectById(cb.value);
+        if (!project?.defaultProjectTag) return;
+        fillProjectSelect(projectSelect, { emptyLabel: '无', selected: project.defaultProjectTag });
+      });
+    });
+  }
+
+  function renderKeyProjectPicker(container, selectedIds = [], { projectSelect = null } = {}) {
     if (!container) return;
     const projects = getKeyProjects();
     if (!projects.length) {
@@ -408,6 +650,7 @@ const App = (() => {
         }
       )
       .join('');
+    bindKeyProjectPickerAutoTag(container, projectSelect);
   }
 
   function readKeyProjectPicker(container) {
@@ -415,10 +658,18 @@ const App = (() => {
     return [...container.querySelectorAll('input[type=checkbox]:checked')].map((cb) => cb.value);
   }
 
+  function refreshKeyProjectDefaultTagSelect(selected) {
+    fillProjectSelect($('#kp-default-tag'), {
+      emptyLabel: '无',
+      selected: selected !== undefined ? selected : $('#kp-default-tag')?.value || '',
+    });
+  }
+
   function resetKeyProjectForm() {
     $('#kp-edit-id').value = '';
     $('#kp-name').value = '';
     $('#kp-notes').value = '';
+    refreshKeyProjectDefaultTagSelect('');
     $('#kp-submit-btn').textContent = '创建项目组';
     $('#kp-cancel-edit').classList.add('hidden');
   }
@@ -429,6 +680,7 @@ const App = (() => {
     const payload = {
       name,
       notes: $('#kp-notes').value.trim(),
+      defaultProjectTag: $('#kp-default-tag').value || '',
     };
     const editId = $('#kp-edit-id').value;
     if (editId) {
@@ -452,6 +704,7 @@ const App = (() => {
     $('#kp-edit-id').value = project.id;
     $('#kp-name').value = project.name;
     $('#kp-notes').value = project.notes || '';
+    refreshKeyProjectDefaultTagSelect(project.defaultProjectTag || '');
     $('#kp-submit-btn').textContent = '保存修改';
     $('#kp-cancel-edit').classList.remove('hidden');
     switchView('key-projects');
@@ -474,6 +727,20 @@ const App = (() => {
     renderKeyProjects();
     renderKeyProjectPickers();
     if (currentView === 'timeline') renderTimeline();
+  }
+
+  async function moveKeyProject(id, direction) {
+    const projects = getKeyProjects();
+    const index = projects.findIndex((p) => p.id === id);
+    if (index < 0) return;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= projects.length) return;
+
+    const [project] = projects.splice(index, 1);
+    projects.splice(nextIndex, 0, project);
+    await persist();
+    renderKeyProjects();
+    renderKeyProjectPickers();
   }
 
   function toggleKeyProjectCard(card, projectId) {
@@ -504,12 +771,14 @@ const App = (() => {
     empty?.classList.toggle('hidden', projects.length > 0);
     if (!projects.length) return;
 
-    projects.forEach((project) => {
+    projects.forEach((project, index) => {
       const logs = data.logs
         .filter((log) => log.keyProjectIds?.includes(project.id))
         .sort((a, b) => b.timestamp - a.timestamp);
       const schedules = data.schedules.filter((sch) => sch.keyProjectIds?.includes(project.id));
       const expanded = expandedKeyProjectIds.has(project.id);
+      const isFirst = index === 0;
+      const isLast = index === projects.length - 1;
 
       const card = document.createElement('article');
       card.className = `kp-card ${expanded ? 'kp-card--expanded' : 'kp-card--collapsed'}`;
@@ -524,6 +793,8 @@ const App = (() => {
             <span class="kp-card-chevron" aria-hidden="true">›</span>
           </button>
           <div class="kp-card-actions">
+            <button type="button" class="btn-secondary btn-kp-move-up" ${isFirst ? 'disabled' : ''}>上移</button>
+            <button type="button" class="btn-secondary btn-kp-move-down" ${isLast ? 'disabled' : ''}>下移</button>
             <button type="button" class="btn-secondary btn-kp-edit">编辑</button>
             <button type="button" class="btn-secondary btn-kp-delete">删除</button>
           </div>
@@ -531,6 +802,7 @@ const App = (() => {
         <div class="kp-card-stats">
           <span>录入任务 ${logs.length} 项</span>
           <span>固定日程 ${schedules.length} 项</span>
+          ${project.defaultProjectTag ? `<span>默认标签 ${escapeHtml(project.defaultProjectTag)}</span>` : ''}
         </div>
         <div class="kp-card-body">
           <section class="kp-card-section">
@@ -570,6 +842,8 @@ const App = (() => {
       `;
 
       card.querySelector('.kp-card-toggle').addEventListener('click', () => toggleKeyProjectCard(card, project.id));
+      card.querySelector('.btn-kp-move-up').addEventListener('click', () => moveKeyProject(project.id, -1));
+      card.querySelector('.btn-kp-move-down').addEventListener('click', () => moveKeyProject(project.id, 1));
       card.querySelector('.btn-kp-edit').addEventListener('click', () => editKeyProject(project));
       card.querySelector('.btn-kp-delete').addEventListener('click', () => deleteKeyProject(project.id));
       list.appendChild(card);
@@ -656,16 +930,16 @@ const App = (() => {
       await addLog();
     });
 
+    $('#entry-form').addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      e.preventDefault();
+      e.currentTarget.requestSubmit();
+    });
+
     const closeEntryDialog = () => $('#entry-dialog').close();
     $('#entry-cancel').addEventListener('click', closeEntryDialog);
     $('#entry-close').addEventListener('click', closeEntryDialog);
 
-    $('#entry-content').addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        $('#entry-form').requestSubmit();
-      }
-    });
     $('#entry-attachment-input').addEventListener('change', async (e) => {
       const files = [...(e.target.files || [])];
       e.target.value = '';
@@ -698,7 +972,28 @@ const App = (() => {
 
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
+    $('#filter-date').addEventListener('change', renderTimeline);
+    $('#far-filter-project')?.addEventListener('change', renderFarPlans);
     $('#filter-trivial').addEventListener('click', () => cycleTimelineTrivialFilter());
+    $('#default-entry-type').addEventListener('change', async (e) => {
+      normalizeProjectTags();
+      data.settings.defaultEntryType = e.target.value;
+      await persist();
+    });
+    $('#btn-reset-entry-field-order').addEventListener('click', resetEntryFieldOrder);
+    $('#setting-enable-waiting').addEventListener('change', async (e) => {
+      normalizeProjectTags();
+      data.settings.waitingFeatureEnabled = e.target.checked;
+      if (!data.settings.waitingFeatureEnabled && data.settings.defaultEntryType === 'waiting') {
+        data.settings.defaultEntryType = 'done';
+      }
+      await persist();
+      updateWaitingFeatureControls();
+      updateDefaultEntryTypeSelect();
+      renderTimeline();
+      renderSummary();
+    });
+    $('#btn-move-past-plans-today').addEventListener('click', movePastPlansToToday);
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -725,20 +1020,40 @@ const App = (() => {
         $$('.tab[data-summary]').forEach((t) => t.classList.remove('active'));
         tab.classList.add('active');
         summaryMode = tab.dataset.summary;
+        if (summaryMode === 'weekly') ensureSummaryWeekRangeInputs();
+        updateSummaryDateNav();
         renderSummary();
       });
     });
 
     $('#summary-prev').addEventListener('click', async () => {
       await flushSummaryToStorage();
-      shiftSummaryDate(summaryMode === 'daily' ? -1 : -7);
+      shiftSummaryDate(-1);
     });
     $('#summary-next').addEventListener('click', async () => {
       await flushSummaryToStorage();
-      shiftSummaryDate(summaryMode === 'daily' ? 1 : 7);
+      shiftSummaryDate(1);
+    });
+    $('#summary-week-prev').addEventListener('click', async () => {
+      await flushSummaryToStorage();
+      shiftSummaryWeekRange(-getSummaryRangeDayCount());
+    });
+    $('#summary-week-next').addEventListener('click', async () => {
+      await flushSummaryToStorage();
+      shiftSummaryWeekRange(getSummaryRangeDayCount());
     });
     $('#summary-date').addEventListener('change', async () => {
       await flushSummaryToStorage();
+      renderSummary();
+    });
+    $('#summary-week-start').addEventListener('change', async () => {
+      await flushSummaryToStorage();
+      normalizeSummaryWeekRange();
+      renderSummary();
+    });
+    $('#summary-week-end').addEventListener('change', async () => {
+      await flushSummaryToStorage();
+      normalizeSummaryWeekRange();
       renderSummary();
     });
 
@@ -753,7 +1068,7 @@ const App = (() => {
       if (isSummaryDirty() && !confirm('重新生成将覆盖当前修改，是否继续？')) return;
       await flushSummaryToStorage();
       if (summaryMode === 'daily') delete data.dailySummaries[getSummaryDateKey()];
-      else delete data.weeklySummaries[getWeekId()];
+      else delete data.weeklySummaries[getWeeklySummaryStorageId()];
       await persist();
       renderSummary();
     });
@@ -865,11 +1180,16 @@ const App = (() => {
       e.preventDefault();
       await saveEditLog();
     });
+    $('#edit-form').addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      e.preventDefault();
+      e.currentTarget.requestSubmit();
+    });
     $('#edit-cancel').addEventListener('click', () => $('#edit-dialog').close());
   }
 
   function getSummaryStorageKey() {
-    return summaryMode === 'daily' ? `daily:${getSummaryDateKey()}` : `weekly:${getWeekId()}`;
+    return summaryMode === 'daily' ? `daily:${getSummaryDateKey()}` : `weekly:${getWeeklySummaryStorageId()}`;
   }
 
   function writeSummaryByKey(key, text) {
@@ -1032,18 +1352,29 @@ const App = (() => {
     if (view === 'calendar') renderCalendar();
     if (view === 'schedules' || view === 'settings') renderScheduleList();
     if (view === 'meetings') renderMeetingList();
-    if (view === 'key-projects') renderKeyProjects();
+    if (view === 'key-projects') {
+      refreshProjectSelects();
+      refreshKeyProjectDefaultTagSelect();
+      renderKeyProjects();
+    }
+    if (view === 'far-plans') {
+      refreshProjectSelects();
+      renderFarPlans();
+    }
     if (view === 'settings') {
       renderProjectTagList();
       refreshProjectSelects();
+      updateDefaultEntryTypeSelect();
+      renderEntryFieldOrderList();
     }
     if (view === 'summary') {
+      updateSummaryDateNav();
       renderSummary();
       setSummaryMdView(summaryMdView);
     }
     if (view === 'timeline') {
       renderTimeline();
-      requestAnimationFrame(() => scrollTimelineToToday(false));
+      requestAnimationFrame(resetMainScroll);
     }
   }
 
@@ -1066,6 +1397,7 @@ const App = (() => {
 
     $('#filter-type').value = '';
     if ($('#filter-project').value) $('#filter-project').value = '';
+    if ($('#filter-date').value) $('#filter-date').value = '';
 
     const tagFilter = getTimelineTagFilter();
     if (tagFilter === TRIVIAL_TAG) {
@@ -1117,10 +1449,12 @@ const App = (() => {
 
   function getMeetingTimelineEntries(ctx) {
     if (!data?.meetings?.length) return [];
-    if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'plan') return [];
+    if (ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting' || ctx.typeFilter === 'plan') return [];
     if (ctx.projectFilter) return [];
     if (ctx.tagFilter === TRIVIAL_TAG) return [];
-    return data.meetings.map(meetingToTimelineEntry);
+    return data.meetings
+      .map(meetingToTimelineEntry)
+      .filter((entry) => matchesTimelineDateFilter(entry.date, ctx.dateFilter));
   }
 
   function renderAll() {
@@ -1129,6 +1463,33 @@ const App = (() => {
     renderScheduleList();
     renderMeetingList();
     renderKeyProjects();
+    renderFarPlans();
+  }
+
+  function refreshAfterLogChange() {
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+    if (currentView === 'far-plans') renderFarPlans();
+    if (currentView === 'calendar') renderCalendar();
+  }
+
+  function getFarPlanLogs() {
+    const projectFilter = $('#far-filter-project')?.value || '';
+    let logs = data.logs.filter((l) => l.type === 'far');
+    if (projectFilter) logs = logs.filter((l) => l.project === projectFilter);
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  function renderFarPlans() {
+    const logs = getFarPlanLogs();
+    const list = $('#far-plans-list');
+    const empty = $('#far-plans-empty');
+    const countEl = $('#far-plans-count');
+    if (!list || !empty) return;
+    list.innerHTML = '';
+    logs.forEach((log) => list.appendChild(createLogItem(log, 'detailed')));
+    empty.classList.toggle('hidden', logs.length > 0);
+    if (countEl) countEl.textContent = logs.length ? `共 ${logs.length} 项` : '';
   }
 
   function escapeHtml(str) {
@@ -1137,6 +1498,32 @@ const App = (() => {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function linkifyText(str) {
+    const text = String(str || '');
+    const urlRe = /https?:\/\/[^\s<>"']+/g;
+    let html = '';
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(urlRe)) {
+      const start = match.index;
+      let url = match[0];
+      let trailing = '';
+      const trailingMatch = url.match(/[),.;!?，。；！？、]+$/);
+      if (trailingMatch) {
+        trailing = trailingMatch[0];
+        url = url.slice(0, -trailing.length);
+      }
+
+      html += escapeHtml(text.slice(lastIndex, start));
+      html += `<a class="log-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+      html += escapeHtml(trailing);
+      lastIndex = start + match[0].length;
+    }
+
+    html += escapeHtml(text.slice(lastIndex));
+    return html;
   }
 
   function formatDeadlineLabel(deadline) {
@@ -1154,6 +1541,30 @@ const App = (() => {
     if (!log.deadline) return '';
     const overdue = isDeadlineOverdue(log.deadline, log.type);
     return `<span class="log-deadline${overdue ? ' overdue' : ''}">· ${escapeHtml(formatDeadlineLabel(log.deadline))}${overdue ? ' 已逾期' : ''}</span>`;
+  }
+
+  async function movePastPlansToToday() {
+    const today = DateUtils.toDateKey(new Date());
+    const pastPlans = data.logs.filter((l) => l.type === 'plan' && l.date < today);
+    if (!pastPlans.length) {
+      alert('没有需要移动的历史计划任务');
+      return;
+    }
+    const count = pastPlans.length;
+    if (!confirm(`确定将 ${count} 条历史计划任务移至今天？`)) return;
+
+    const baseTs = Date.now();
+    pastPlans
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .forEach((log, i) => {
+        log.date = today;
+        log.timestamp = baseTs - i;
+      });
+
+    await persist();
+    renderAll();
+    if (currentView === 'timeline') scrollTimelineToToday(false);
+    alert(`已将 ${count} 条计划任务移至今天`);
   }
 
   async function addLog() {
@@ -1184,10 +1595,16 @@ const App = (() => {
     resetEntryForm();
     $('#entry-dialog').close();
     renderTimeline();
-    scrollTimelineToToday(false);
+    requestAnimationFrame(resetMainScroll);
     if (currentView === 'calendar') renderCalendar();
     if (currentView === 'schedules') renderScheduleList();
     if (currentView === 'key-projects') renderKeyProjects();
+    if (currentView === 'far-plans') renderFarPlans();
+  }
+
+  function resetMainScroll() {
+    const main = $('.main');
+    if (main) main.scrollTop = 0;
   }
 
   function scrollTimelineToToday(smooth = true) {
@@ -1202,6 +1619,7 @@ const App = (() => {
     return `
       <span class="timeline-day-stat stat-done">已完成 ${stats.done}</span>
       <span class="timeline-day-stat stat-doing">进行中 ${stats.doing}</span>
+      ${isWaitingFeatureEnabled() ? `<span class="timeline-day-stat stat-waiting">等结果 ${stats.waiting}</span>` : ''}
       <span class="timeline-day-stat stat-plan">计划 ${stats.plan}</span>
     `;
   }
@@ -1238,12 +1656,34 @@ const App = (() => {
     renderTimeline();
   }
 
+  function getThisWeekDateRange() {
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
+    return {
+      start: DateUtils.toDateKey(weekStart),
+      end: DateUtils.toDateKey(weekEnd),
+    };
+  }
+
+  function matchesTimelineDateFilter(dateKey, dateFilter) {
+    if (!dateFilter) return true;
+    if (dateFilter === 'today') {
+      return dateKey === DateUtils.toDateKey(new Date());
+    }
+    if (dateFilter === 'this-week') {
+      const { start, end } = getThisWeekDateRange();
+      return dateKey >= start && dateKey <= end;
+    }
+    return true;
+  }
+
   function getTimelineFilterContext() {
     const typeFilter = $('#filter-type').value;
     const tagFilter = getTimelineTagFilter();
     const projectFilter = $('#filter-project').value;
+    const dateFilter = $('#filter-date')?.value || '';
     const showSchedules = !projectFilter && tagFilter !== TRIVIAL_TAG;
-    return { typeFilter, tagFilter, projectFilter, showSchedules };
+    return { typeFilter, tagFilter, projectFilter, dateFilter, showSchedules };
   }
 
   function isScheduleCompleted(scheduleId, dateKey) {
@@ -1254,7 +1694,7 @@ const App = (() => {
 
   /** 固定日程：打勾=已完成，未打勾=计划；不属于任何项目；非琐碎任务 */
   function filterSchedulesForTimeline(dateKey, ctx) {
-    if (!ctx.showSchedules || ctx.typeFilter === 'doing') return [];
+    if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return [];
     let schedules = ScheduleLogic.getSchedulesForDate(data.schedules, dateKey);
     if (ctx.typeFilter === 'done') {
       schedules = schedules.filter((s) => isScheduleCompleted(s.id, dateKey));
@@ -1288,7 +1728,7 @@ const App = (() => {
     if (logs.length) {
       start = DateUtils.parseDateKey([...new Set(logs.map((l) => l.date))].sort()[0]);
     }
-    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing';
+    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing' && ctx.typeFilter !== 'waiting';
     if (includeSchedules && data.schedules.length) {
       ({ start, end } = extendTimelineSpanFromSchedules(start, end));
       if (!logs.length && start > today) start = today;
@@ -1299,9 +1739,10 @@ const App = (() => {
   function countScheduleStatsInSpan(start, end, ctx) {
     let done = 0;
     let plan = 0;
-    if (!ctx.showSchedules || ctx.typeFilter === 'doing') return { done, plan };
+    if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return { done, plan };
     for (let cursor = new Date(start); cursor <= end; cursor = DateUtils.addDays(cursor, 1)) {
       const dk = DateUtils.toDateKey(cursor);
+      if (ctx.dateFilter && !matchesTimelineDateFilter(dk, ctx.dateFilter)) continue;
       filterSchedulesForTimeline(dk, ctx).forEach((s) => {
         if (isScheduleCompleted(s.id, dk)) done += 1;
         else plan += 1;
@@ -1312,7 +1753,7 @@ const App = (() => {
 
   function collectTimelineDates(logs, ctx) {
     const keys = new Set(logs.map((l) => l.date));
-    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing';
+    const includeSchedules = ctx.showSchedules && ctx.typeFilter !== 'doing' && ctx.typeFilter !== 'waiting';
     const { start, end } = getTimelineSpan(logs, ctx);
 
     if (!keys.size && !includeSchedules) return [];
@@ -1321,6 +1762,7 @@ const App = (() => {
     if (includeSchedules) {
       for (let cursor = end; cursor >= start; cursor = DateUtils.addDays(cursor, -1)) {
         const dk = DateUtils.toDateKey(cursor);
+        if (ctx.dateFilter && !matchesTimelineDateFilter(dk, ctx.dateFilter)) continue;
         if (keys.has(dk)) continue;
         if (filterSchedulesForTimeline(dk, ctx).length) {
           keys.add(dk);
@@ -1328,7 +1770,9 @@ const App = (() => {
       }
     }
 
-    return [...keys].sort((a, b) => b.localeCompare(a));
+    const dates = [...keys].sort((a, b) => b.localeCompare(a));
+    if (!ctx.dateFilter) return dates;
+    return dates.filter((dk) => matchesTimelineDateFilter(dk, ctx.dateFilter));
   }
 
   function readScheduleWeekRange() {
@@ -1422,6 +1866,9 @@ const App = (() => {
     if (ctx.projectFilter) filtered = filtered.filter((l) => l.project === ctx.projectFilter);
     if (ctx.tagFilter === TRIVIAL_TAG) filtered = filtered.filter((l) => isTrivialLog(l));
     if (ctx.tagFilter === 'exclude-trivial') filtered = filtered.filter((l) => !isTrivialLog(l));
+    if (ctx.dateFilter) {
+      filtered = filtered.filter((l) => matchesTimelineDateFilter(l.date, ctx.dateFilter));
+    }
     return filtered;
   }
 
@@ -1434,25 +1881,76 @@ const App = (() => {
     return {
       done: scopeLogs.filter((l) => l.type === 'done').length + scopeMeetings.length + scheduleStats.done,
       doing: scopeLogs.filter((l) => l.type === 'doing').length,
+      waiting: scopeLogs.filter((l) => l.type === 'waiting').length,
       plan: scopeLogs.filter((l) => l.type === 'plan').length + scheduleStats.plan,
     };
+  }
+
+  function renderWaitingPanel(waitingLogs) {
+    const panel = $('#waiting-panel');
+    if (!panel) return;
+    if (!isWaitingFeatureEnabled()) {
+      panel.classList.add('hidden');
+      panel.parentElement?.classList.remove('timeline-board--has-waiting');
+      panel.innerHTML = '';
+      return;
+    }
+    const sorted = [...waitingLogs].sort((a, b) => {
+      if (a.deadline && b.deadline && a.deadline !== b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline && !b.deadline) return -1;
+      if (!a.deadline && b.deadline) return 1;
+      return b.timestamp - a.timestamp;
+    });
+
+    panel.classList.toggle('hidden', sorted.length === 0);
+    panel.parentElement?.classList.toggle('timeline-board--has-waiting', sorted.length > 0);
+    if (!sorted.length) {
+      panel.innerHTML = '';
+      return;
+    }
+
+    panel.className = 'waiting-panel';
+    panel.innerHTML = `
+      <header class="waiting-panel-header">
+        <div>
+          <h3>等结果</h3>
+          <p>依赖他人输出，等待验收的任务</p>
+        </div>
+        <span class="waiting-panel-count">${sorted.length}</span>
+      </header>
+    `;
+
+    const list = document.createElement('ul');
+    list.className = 'log-list waiting-log-list';
+    sorted.forEach((log) => {
+      list.appendChild(createLogItem(log, 'detailed'));
+    });
+    panel.appendChild(list);
   }
 
   function renderTimeline() {
     const ctx = getTimelineFilterContext();
     const { typeFilter } = ctx;
-    const scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
+    const waitingEnabled = isWaitingFeatureEnabled();
+    let scopeLogs = excludeFarLogs(applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false }));
+    if (!waitingEnabled) scopeLogs = scopeLogs.filter((l) => l.type !== 'waiting');
     const headerStats = computeTimelineHeaderStats(scopeLogs, ctx);
-    let logs = applyTimelineLogFilters([...data.logs], ctx);
+    const waitingLogs = waitingEnabled ? scopeLogs.filter((l) => l.type === 'waiting') : [];
+    let logs = excludeFarLogs(applyTimelineLogFilters([...data.logs], ctx));
+    if (!waitingEnabled || !ctx.typeFilter) logs = logs.filter((l) => l.type !== 'waiting');
     logs = [...logs, ...getMeetingTimelineEntries(ctx)];
 
     const statChip = (type, label, count) => {
       const active = typeFilter === type ? ' stat-filter--active' : '';
-      return `<button type="button" class="stat-item stat-filter stat-${type}${active}" data-filter-type="${type}">${label} ${count}</button>`;
+      const typeClass = type ? `stat-${type}` : 'stat-all';
+      return `<button type="button" class="stat-item stat-filter ${typeClass}${active}" data-filter-type="${type}">${label} ${count}</button>`;
     };
+    const allCount = headerStats.done + headerStats.doing + (waitingEnabled ? headerStats.waiting : 0) + headerStats.plan;
     $('#timeline-stats').innerHTML =
+      statChip('', '全部', allCount) +
       statChip('done', '已完成', headerStats.done) +
       statChip('doing', '进行中', headerStats.doing) +
+      (waitingEnabled ? statChip('waiting', '等结果', headerStats.waiting) : '') +
       statChip('plan', '计划', headerStats.plan);
 
     const byDate = new Map();
@@ -1467,7 +1965,8 @@ const App = (() => {
     axis.innerHTML = '';
     updateTimelineViewToggle();
     updateTrivialFilterSwitch();
-    $('#timeline-empty').classList.toggle('hidden', dates.length > 0);
+    renderWaitingPanel(waitingLogs);
+    $('#timeline-empty').classList.toggle('hidden', dates.length > 0 || waitingLogs.length > 0);
 
     const today = DateUtils.toDateKey(new Date());
 
@@ -1481,6 +1980,7 @@ const App = (() => {
           dayLogs.filter((l) => l.type === 'done').length +
           daySchedules.filter((s) => isScheduleCompleted(s.id, dateKey)).length,
         doing: dayLogs.filter((l) => l.type === 'doing').length,
+        waiting: waitingEnabled ? dayLogs.filter((l) => l.type === 'waiting').length : 0,
         plan:
           dayLogs.filter((l) => l.type === 'plan').length +
           daySchedules.filter((s) => !isScheduleCompleted(s.id, dateKey)).length,
@@ -1563,9 +2063,9 @@ const App = (() => {
         ${deadlineMetaHtml(log)}
       </div>
       ${logTagsHtml(log)}
-      <p class="log-content">${escapeHtml(log.content)}</p>
-      ${log.purpose ? `<p class="log-purpose">目的：${escapeHtml(log.purpose)}</p>` : ''}
-      ${log.notes ? `<p class="log-notes">备注：${escapeHtml(log.notes)}</p>` : ''}
+      <p class="log-content">${linkifyText(log.content)}</p>
+      ${log.purpose ? `<p class="log-purpose">目的：${linkifyText(log.purpose)}</p>` : ''}
+      ${log.notes ? `<p class="log-notes">备注：${linkifyText(log.notes)}</p>` : ''}
       ${renderAttachmentsBlockHtml(log.attachments)}
     `;
   }
@@ -1610,23 +2110,99 @@ const App = (() => {
     ]
       .filter(Boolean)
       .join(' · ');
+    const summaryParts = [
+      `<span>${linkifyText(log.content)}</span>`,
+      log.purpose ? `<span class="log-compact-purpose"> · 目的：${linkifyText(log.purpose)}</span>` : '',
+      log.notes ? `<span> · 备注：${linkifyText(log.notes)}</span>` : '',
+    ].filter(Boolean);
 
     return `
       <div class="log-compact-line log-compact-meta">
         <div class="log-compact-meta-start">${metaBits.join('')}</div>
         ${logCompactTagsInlineHtml(log)}
       </div>
-      <p class="log-compact-line log-compact-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</p>
+      <p class="log-compact-line log-compact-summary" title="${escapeHtml(summary)}">${summaryParts.join('')}</p>
     `;
   }
 
-  function createLogItem(log) {
-    const view = getTimelineView();
+  function setupStatusBadge(badge, li, { onClick, onRevert, clickLabel, revertLabel, itemClass, triggerClass }) {
+    if (!badge) return;
+    if (itemClass) li.classList.add(itemClass);
+    badge.classList.add(triggerClass || 'log-status-quick-trigger');
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('tabindex', '0');
+    const hints = [];
+    if (onClick && clickLabel) hints.push(`左键${clickLabel}`);
+    if (onRevert && revertLabel) hints.push(`右键${revertLabel}`);
+    badge.setAttribute('title', hints.join('；'));
+    badge.setAttribute('aria-label', hints.join('；'));
+    if (onClick) {
+      badge.addEventListener('click', () => onClick());
+      badge.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        onClick();
+      });
+    }
+    if (onRevert) {
+      badge.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        onRevert();
+      });
+    }
+  }
+
+  function createLogItem(log, forcedView = '') {
+    const view = forcedView || getTimelineView();
     const li = document.createElement('li');
     li.className = `log-item log-item--${view}`;
     const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
     li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
     bindAttachmentActions(li, log.attachments || []);
+    li.querySelectorAll('.log-link').forEach((link) => {
+      link.addEventListener('click', (e) => e.stopPropagation());
+    });
+    if (log.type === 'done') {
+      setupStatusBadge(li.querySelector('.type-done'), li, {
+        onRevert: () => revertDoneLog(log.id),
+        revertLabel: '回到进行中',
+        triggerClass: 'log-quick-revert-trigger',
+      });
+    } else if (log.type === 'doing') {
+      setupStatusBadge(li.querySelector('.type-doing'), li, {
+        onClick: () => completeDoingLog(log.id),
+        onRevert: () => revertDoingLog(log.id),
+        clickLabel: '标记为已完成',
+        revertLabel: '回到计划',
+        itemClass: 'log-item--quick-complete',
+        triggerClass: 'log-quick-complete-trigger',
+      });
+    } else if (log.type === 'waiting') {
+      setupStatusBadge(li.querySelector('.type-waiting'), li, {
+        onClick: () => completeWaitingLog(log.id),
+        onRevert: () => revertWaitingLog(log.id),
+        clickLabel: '标记为已完成',
+        revertLabel: '回到进行中',
+        itemClass: 'log-item--quick-complete',
+        triggerClass: 'log-quick-complete-trigger',
+      });
+    } else if (log.type === 'plan') {
+      setupStatusBadge(li.querySelector('.type-plan'), li, {
+        onClick: () => startPlanLog(log.id),
+        onRevert: () => revertPlanToFarLog(log.id),
+        clickLabel: '标记为进行中',
+        revertLabel: '移至遥远计划',
+        itemClass: 'log-item--quick-start',
+        triggerClass: 'log-quick-start-trigger',
+      });
+    } else if (log.type === 'far') {
+      setupStatusBadge(li.querySelector('.type-far'), li, {
+        onClick: () => promoteFarToPlanLog(log.id),
+        clickLabel: '移回计划',
+        itemClass: 'log-item--quick-start',
+        triggerClass: 'log-quick-start-trigger',
+      });
+    }
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
     return li;
@@ -1666,12 +2242,10 @@ const App = (() => {
     $('#edit-notes').value = log.notes || '';
     $('#edit-deadline').value = log.deadline || '';
     $('#edit-tag-trivial').checked = isTrivialLog(log);
-    renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || []);
+    renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || [], { projectSelect: $('#edit-project') });
     editFormAttachments = cloneAttachments(log.attachments);
     renderEditAttachmentsForm();
-    const dt = new Date(log.timestamp);
-    dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
-    $('#edit-time').value = dt.toISOString().slice(0, 16);
+    $('#edit-time').value = getLocalDatetimeInputValue(new Date(log.timestamp));
     $('#edit-dialog').showModal();
   }
 
@@ -1693,24 +2267,151 @@ const App = (() => {
     log.date = DateUtils.toDateKey(new Date(ts));
     await persist();
     $('#edit-dialog').close();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
+  }
+
+  async function completeDoingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'doing') return;
+    log.type = 'done';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function startPlanLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'plan') return;
+    log.type = 'doing';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function completeWaitingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'waiting') return;
+    log.type = 'done';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function revertDoneLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'done') return;
+    log.type = 'doing';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function revertDoingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'doing') return;
+    log.type = 'plan';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function revertWaitingLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'waiting') return;
+    log.type = 'doing';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function revertPlanToFarLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'plan') return;
+    log.type = 'far';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function promoteFarToPlanLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'far') return;
+    log.type = 'plan';
+    await persist();
+    refreshAfterLogChange();
   }
 
   async function deleteLog(id) {
     if (!confirm('确定删除这条记录？')) return;
     data.logs = data.logs.filter((l) => l.id !== id);
     await persist();
-    renderTimeline();
+    refreshAfterLogChange();
   }
 
   function getSummaryDateKey() {
     return $('#summary-date').value || DateUtils.toDateKey(new Date());
   }
 
-  function getWeekId() {
-    const d = DateUtils.parseDateKey(getSummaryDateKey());
-    return DateUtils.getISOWeekInfo(DateUtils.startOfWeek(d)).weekId;
+  function getDefaultWeekRange() {
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
+    return {
+      start: DateUtils.toDateKey(weekStart),
+      end: DateUtils.toDateKey(weekEnd),
+    };
+  }
+
+  function ensureSummaryWeekRangeInputs() {
+    const startEl = $('#summary-week-start');
+    const endEl = $('#summary-week-end');
+    if (!startEl?.value || !endEl?.value) {
+      const { start, end } = getDefaultWeekRange();
+      startEl.value = start;
+      endEl.value = end;
+    }
+  }
+
+  function normalizeSummaryWeekRange() {
+    const startEl = $('#summary-week-start');
+    const endEl = $('#summary-week-end');
+    if (!startEl || !endEl) return;
+    if (!startEl.value) startEl.value = getDefaultWeekRange().start;
+    if (!endEl.value) endEl.value = getDefaultWeekRange().end;
+    if (endEl.value < startEl.value) endEl.value = startEl.value;
+  }
+
+  function getSummaryWeekStart() {
+    return $('#summary-week-start')?.value || getDefaultWeekRange().start;
+  }
+
+  function getSummaryWeekEnd() {
+    return $('#summary-week-end')?.value || getDefaultWeekRange().end;
+  }
+
+  function getSummaryRangeDayCount() {
+    normalizeSummaryWeekRange();
+    const start = DateUtils.parseDateKey(getSummaryWeekStart());
+    const end = DateUtils.parseDateKey(getSummaryWeekEnd());
+    return Math.round((end - start) / 86400000) + 1;
+  }
+
+  function getWeeklySummaryStorageId() {
+    normalizeSummaryWeekRange();
+    return `${getSummaryWeekStart()}_${getSummaryWeekEnd()}`;
+  }
+
+  function getWeeklySummarySavedText() {
+    const id = getWeeklySummaryStorageId();
+    if (data.weeklySummaries[id]) return data.weeklySummaries[id];
+
+    const start = getSummaryWeekStart();
+    const end = getSummaryWeekEnd();
+    const isoWeekStart = DateUtils.toDateKey(DateUtils.startOfWeek(DateUtils.parseDateKey(start)));
+    const isoWeekEnd = DateUtils.toDateKey(DateUtils.endOfWeek(DateUtils.parseDateKey(start)));
+    if (start === isoWeekStart && end === isoWeekEnd) {
+      const weekId = DateUtils.getISOWeekInfo(DateUtils.parseDateKey(start)).weekId;
+      return data.weeklySummaries[weekId] || null;
+    }
+    return null;
+  }
+
+  function updateSummaryDateNav() {
+    const isWeekly = summaryMode === 'weekly';
+    $('#summary-daily-date-nav')?.classList.toggle('hidden', isWeekly);
+    $('#summary-weekly-date-nav')?.classList.toggle('hidden', !isWeekly);
   }
 
   function shiftSummaryDate(delta) {
@@ -1719,8 +2420,20 @@ const App = (() => {
     renderSummary();
   }
 
+  function shiftSummaryWeekRange(deltaDays) {
+    normalizeSummaryWeekRange();
+    const start = getSummaryWeekStart();
+    const end = getSummaryWeekEnd();
+    $('#summary-week-start').value = DateUtils.toDateKey(DateUtils.addDays(DateUtils.parseDateKey(start), deltaDays));
+    $('#summary-week-end').value = DateUtils.toDateKey(DateUtils.addDays(DateUtils.parseDateKey(end), deltaDays));
+    renderSummary();
+  }
+
   function renderSummary() {
     const dateKey = getSummaryDateKey();
+    const summaryLogs = isWaitingFeatureEnabled()
+      ? data.logs
+      : data.logs.filter((l) => l.type !== 'waiting');
     let text;
 
     if (summaryMode === 'daily') {
@@ -1729,20 +2442,23 @@ const App = (() => {
       } else {
         text = SummaryEngine.generateDaily(
           dateKey,
-          data.logs,
+          summaryLogs,
           data.schedules,
           data.scheduleCompletions
         );
       }
     } else {
-      const weekId = getWeekId();
-      if (data.weeklySummaries[weekId]) {
-        text = data.weeklySummaries[weekId];
+      normalizeSummaryWeekRange();
+      const rangeStart = getSummaryWeekStart();
+      const rangeEnd = getSummaryWeekEnd();
+      const saved = getWeeklySummarySavedText();
+      if (saved) {
+        text = saved;
       } else {
-        const weekStart = DateUtils.startOfWeek(DateUtils.parseDateKey(dateKey));
         text = SummaryEngine.generateWeekly(
-          weekStart,
-          data.logs,
+          rangeStart,
+          rangeEnd,
+          summaryLogs,
           data.schedules,
           data.scheduleCompletions
         );
@@ -1762,7 +2478,7 @@ const App = (() => {
     const name =
       summaryMode === 'daily'
         ? `日报-${getSummaryDateKey()}.md`
-        : `周报-${getWeekId()}.md`;
+        : `周报-${getWeeklySummaryStorageId()}.md`;
     downloadFile(name, text, 'text/markdown');
   }
 
@@ -1858,7 +2574,7 @@ const App = (() => {
       });
     }
 
-    const dayLogs = data.logs.filter((l) => l.date === dateKey);
+    const dayLogs = data.logs.filter((l) => l.date === dateKey && l.type !== 'far');
     const logEl = $('#cal-day-logs');
     if (!dayLogs.length) {
       logEl.innerHTML = '<h4>当日日志</h4><p class="hint">无记录</p>';

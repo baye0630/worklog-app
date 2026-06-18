@@ -78,6 +78,7 @@
       </div>
       <nav class="nav">
         <button class="nav-item active" data-view="timeline">时间线</button>
+        <button class="nav-item" data-view="far-plans">遥远计划</button>
         <button class="nav-item" data-view="summary">总结</button>
         <button class="nav-item" data-view="calendar">月历</button>
         <button class="nav-item" data-view="schedules">固定日程</button>
@@ -111,11 +112,18 @@
             <option value="">全部</option>
             <option value="done">已完成</option>
             <option value="doing">进行中</option>
+            <option value="waiting">等结果</option>
             <option value="plan">计划</option>
           </select>
           <label>项目</label>
           <select id="filter-project">
             <option value="">全部</option>
+          </select>
+          <label>日期</label>
+          <select id="filter-date">
+            <option value="">全部</option>
+            <option value="today">仅今天</option>
+            <option value="this-week">仅本周</option>
           </select>
           <button type="button" id="filter-trivial" class="filter-trivial-switch" aria-label="琐碎任务筛选：全部">
             <span class="filter-trivial-label">琐碎任务</span>
@@ -128,7 +136,10 @@
             <button type="button" class="segmented-toggle-btn active" data-timeline-view="detailed" aria-pressed="true">详细</button>
           </div>
         </div>
-        <div id="timeline-axis" class="timeline-axis"></div>
+        <div class="timeline-board">
+          <div id="timeline-axis" class="timeline-axis"></div>
+          <aside id="waiting-panel" class="waiting-panel" aria-label="等结果任务"></aside>
+        </div>
         <p id="timeline-empty" class="empty hidden">暂无记录，点击左侧「快速录入」添加吧。</p>
       </section>
 
@@ -141,10 +152,17 @@
             <button class="tab active" data-summary="daily">每日总结</button>
             <button class="tab" data-summary="weekly">每周总结</button>
           </div>
-          <div class="date-nav">
+          <div class="date-nav" id="summary-daily-date-nav">
             <button id="summary-prev" class="btn-icon">‹</button>
             <input type="date" id="summary-date" />
             <button id="summary-next" class="btn-icon">›</button>
+          </div>
+          <div class="date-nav date-nav--range hidden" id="summary-weekly-date-nav">
+            <button id="summary-week-prev" class="btn-icon">‹</button>
+            <input type="date" id="summary-week-start" aria-label="开始日期" />
+            <span class="date-range-sep">至</span>
+            <input type="date" id="summary-week-end" aria-label="结束日期" />
+            <button id="summary-week-next" class="btn-icon">›</button>
           </div>
           <div class="action-bar">
             <span id="summary-save-status" class="summary-save-status"></span>
@@ -322,6 +340,11 @@
               <label class="entry-field-label" for="kp-notes">项目说明（可选）</label>
               <textarea id="kp-notes" rows="2" placeholder="项目目标、范围等"></textarea>
             </div>
+            <div class="entry-field">
+              <label class="entry-field-label" for="kp-default-tag">默认项目标签（可选）</label>
+              <select id="kp-default-tag"></select>
+              <p class="hint">录入任务勾选此关键项目时，会自动选中该标签，仍可手动修改。</p>
+            </div>
             <div class="kp-form-actions">
               <button type="submit" class="btn-primary" id="kp-submit-btn">创建项目组</button>
               <button type="button" class="btn-secondary hidden" id="kp-cancel-edit">取消编辑</button>
@@ -331,6 +354,21 @@
 
         <div id="kp-list" class="kp-list"></div>
         <p id="kp-empty" class="empty hidden">暂无关键项目，请先创建项目组。</p>
+      </section>
+
+      <!-- 遥远计划 -->
+      <section id="view-far-plans" class="view hidden">
+        <h2 class="view-hero-title">遥远的未来计划</h2>
+        <p class="view-hero-subtitle">暂不显示在时间线；在时间线中右键「计划」可移入此处，左键可移回计划。</p>
+        <div class="filter-bar far-plans-toolbar">
+          <label for="far-filter-project">项目</label>
+          <select id="far-filter-project">
+            <option value="">全部</option>
+          </select>
+          <span id="far-plans-count" class="far-plans-count"></span>
+        </div>
+        <ul id="far-plans-list" class="log-list far-plans-list"></ul>
+        <p id="far-plans-empty" class="empty hidden">暂无遥远计划任务</p>
       </section>
 
       <!-- 设置 -->
@@ -359,6 +397,39 @@
         </div>
 
         <div class="settings-block">
+          <h3>录入偏好</h3>
+          <p class="hint">设置打开快速录入时默认选中的任务状态；不影响已有记录。</p>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-enable-waiting" />
+            <span>
+              <strong>启用等结果模块</strong>
+              <small>开启后显示「等结果」状态、顶部统计和右侧等待栏。</small>
+            </span>
+          </label>
+          <div class="settings-field">
+            <label for="default-entry-type">默认录入状态</label>
+            <select id="default-entry-type">
+              <option value="done">已完成</option>
+              <option value="doing">进行中</option>
+              <option value="waiting">等结果</option>
+              <option value="plan">计划（待办）</option>
+              <option value="far">遥远的未来计划</option>
+            </select>
+          </div>
+          <div class="entry-field-order-settings">
+            <p class="hint">调整快速录入弹窗中各字段的显示顺序；正文内容始终保持在最上方。</p>
+            <ul id="entry-field-order-list" class="entry-field-order-list"></ul>
+            <button type="button" id="btn-reset-entry-field-order" class="btn-secondary">恢复默认顺序</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>任务整理</h3>
+          <p class="hint">将今天之前所有「计划」状态的任务移至今天时间线，便于集中处理遗留待办。</p>
+          <button type="button" id="btn-move-past-plans-today" class="btn-secondary">一键将往日计划移至今天</button>
+        </div>
+
+        <div class="settings-block">
           <h3>数据备份</h3>
           <p class="hint">备份包含全部本地数据：工作记录及其附件、固定日程、会议纪要及其附件等，导出为加密 .json 文件。</p>
           <div class="inline-form">
@@ -382,41 +453,65 @@
         <button type="button" id="entry-close" class="btn-icon entry-dialog-close" aria-label="关闭">×</button>
       </div>
       <textarea id="entry-content" rows="3" placeholder="记录你在做什么 / 完成了什么…" required></textarea>
-      <select id="entry-type">
-        <option value="done">已完成</option>
-        <option value="doing">进行中</option>
-        <option value="plan">计划（待办）</option>
-      </select>
-      <input type="datetime-local" id="entry-time" />
-      <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
-      <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
-      <select id="entry-project"></select>
-      <label class="entry-field-label" for="entry-purpose">任务目的（可选）</label>
-      <input type="text" id="entry-purpose" placeholder="为什么要做这件事" />
-      <label class="entry-field-label" for="entry-notes">备注（可选）</label>
-      <textarea id="entry-notes" rows="2" placeholder="补充说明、链接等"></textarea>
-      <div class="entry-field">
-        <span class="entry-field-label">附件（截图、文件，可选）</span>
-        <div class="mm-attachments">
-          <ul id="entry-attachments-list" class="mm-attachments-list"></ul>
-          <div class="mm-attachments-actions">
-            <label class="btn-secondary file-btn">
-              选择文件
-              <input type="file" id="entry-attachment-input" multiple hidden />
-            </label>
-            <span class="hint mm-attachments-hint">支持图片、PDF 等；在表单内 Ctrl+V 可粘贴截图。</span>
+      <div id="entry-fields-host">
+        <div class="entry-field-block" data-entry-field="type">
+          <select id="entry-type">
+            <option value="done">已完成</option>
+            <option value="doing">进行中</option>
+            <option value="waiting">等结果</option>
+            <option value="plan">计划（待办）</option>
+            <option value="far">遥远的未来计划</option>
+          </select>
+        </div>
+        <div class="entry-field-block" data-entry-field="time">
+          <input type="datetime-local" id="entry-time" />
+          <div class="datetime-quick-actions">
+            <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="today">今天</button>
+            <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="now">现在</button>
           </div>
         </div>
-      </div>
-      <label class="entry-field-label" for="entry-deadline">DDL 截止日期（可选）</label>
-      <input type="date" id="entry-deadline" />
-      <label class="entry-tag-check checkbox-label">
-        <input type="checkbox" id="entry-tag-trivial" />
-        琐碎任务
-      </label>
-      <div class="entry-field">
-        <span class="entry-field-label">关键项目（可选，可多选）</span>
-        <div id="entry-key-projects" class="kp-picker"></div>
+        <div class="entry-field-block" data-entry-field="withWhom">
+          <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
+        </div>
+        <div class="entry-field-block" data-entry-field="project">
+          <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
+          <select id="entry-project"></select>
+        </div>
+        <div class="entry-field-block" data-entry-field="purpose">
+          <label class="entry-field-label" for="entry-purpose">任务目的（可选）</label>
+          <input type="text" id="entry-purpose" placeholder="为什么要做这件事" />
+        </div>
+        <div class="entry-field-block" data-entry-field="notes">
+          <label class="entry-field-label" for="entry-notes">备注（可选）</label>
+          <textarea id="entry-notes" rows="2" placeholder="补充说明、链接等"></textarea>
+        </div>
+        <div class="entry-field-block entry-field" data-entry-field="attachments">
+          <span class="entry-field-label">附件（截图、文件，可选）</span>
+          <div class="mm-attachments">
+            <ul id="entry-attachments-list" class="mm-attachments-list"></ul>
+            <div class="mm-attachments-actions">
+              <label class="btn-secondary file-btn">
+                选择文件
+                <input type="file" id="entry-attachment-input" multiple hidden />
+              </label>
+              <span class="hint mm-attachments-hint">支持图片、PDF 等；在表单内 Ctrl+V 可粘贴截图。</span>
+            </div>
+          </div>
+        </div>
+        <div class="entry-field-block" data-entry-field="deadline">
+          <label class="entry-field-label" for="entry-deadline">DDL 截止日期（可选）</label>
+          <input type="date" id="entry-deadline" />
+        </div>
+        <div class="entry-field-block" data-entry-field="trivial">
+          <label class="entry-tag-check checkbox-label">
+            <input type="checkbox" id="entry-tag-trivial" />
+            琐碎任务
+          </label>
+        </div>
+        <div class="entry-field-block entry-field" data-entry-field="keyProjects">
+          <span class="entry-field-label">关键项目（可选，可多选）</span>
+          <div id="entry-key-projects" class="kp-picker"></div>
+        </div>
       </div>
       <p class="entry-hint">Ctrl + Enter 提交</p>
       <div class="dialog-actions">
@@ -434,9 +529,17 @@
       <select id="edit-type">
         <option value="done">已完成</option>
         <option value="doing">进行中</option>
+        <option value="waiting">等结果</option>
         <option value="plan">计划（待办）</option>
+        <option value="far">遥远的未来计划</option>
       </select>
-      <input type="datetime-local" id="edit-time" />
+      <div class="datetime-field">
+        <input type="datetime-local" id="edit-time" />
+        <div class="datetime-quick-actions">
+          <button type="button" class="btn-secondary" data-datetime-target="edit-time" data-datetime-action="today">今天</button>
+          <button type="button" class="btn-secondary" data-datetime-target="edit-time" data-datetime-action="now">现在</button>
+        </div>
+      </div>
       <input type="text" id="edit-with-whom" placeholder="是和谁（可选）" />
       <label class="entry-field-label" for="edit-project">项目标签（可选）</label>
       <select id="edit-project"></select>

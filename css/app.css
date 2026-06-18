@@ -1175,6 +1175,7 @@ body:has(#app:not(.hidden)) {
 .log-item-main {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .log-item--compact {
@@ -1193,6 +1194,7 @@ body:has(#app:not(.hidden)) {
   margin-bottom: 8px;
   font-size: var(--fs-sm);
   color: var(--apple-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .type-badge {
@@ -1231,6 +1233,8 @@ body:has(#app:not(.hidden)) {
   margin: 0 0 6px;
   line-height: 1.45;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-size: var(--fs-base);
 }
 
@@ -1251,9 +1255,9 @@ body:has(#app:not(.hidden)) {
 .log-compact-meta-start {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .log-compact-meta-start .type-badge {
@@ -1266,7 +1270,6 @@ body:has(#app:not(.hidden)) {
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
-  overflow: hidden;
   margin-left: calc(8px * var(--ui-scale));
 }
 
@@ -1278,11 +1281,11 @@ body:has(#app:not(.hidden)) {
 .log-compact-summary {
   margin: 4px 0 0;
   font-size: var(--fs-sm);
-  line-height: 1.35;
+  line-height: 1.45;
   color: var(--apple-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .log-compact-purpose {
@@ -1295,6 +1298,9 @@ body:has(#app:not(.hidden)) {
   font-size: var(--fs-sm);
   color: var(--apple-text-secondary);
   line-height: 1.4211;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .log-purpose {

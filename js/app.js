@@ -24,7 +24,8 @@ const App = (() => {
   const TRIVIAL_TAG = '琐碎任务';
   const MEETING_TIMELINE_TAG = '会议纪要';
   const LOG_TYPES = ['done', 'doing', 'waiting', 'plan', 'far'];
-  const MAX_MEETING_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  const MAX_MEETING_ATTACHMENT_BYTES = MAX_ATTACHMENT_BYTES;
   const DEFAULT_ENTRY_FIELD_ORDER = [
     'type',
     'time',
@@ -32,6 +33,7 @@ const App = (() => {
     'project',
     'purpose',
     'notes',
+    'attachments',
     'deadline',
     'trivial',
     'keyProjects',
@@ -43,6 +45,7 @@ const App = (() => {
     project: '项目标签',
     purpose: '任务目的',
     notes: '备注',
+    attachments: '附件',
     deadline: 'DDL 截止日期',
     trivial: '琐碎任务',
     keyProjects: '关键项目',
@@ -69,6 +72,7 @@ const App = (() => {
         'project',
         'purpose',
         'notes',
+        'attachments',
         'deadline',
         'trivial',
         'keyProjects',
@@ -92,6 +96,8 @@ const App = (() => {
   const expandedKeyProjectIds = new Set();
   const expandedMeetingIds = new Set();
   let meetingFormAttachments = [];
+  let entryFormAttachments = [];
+  let editFormAttachments = [];
   let attachmentPreviewObjectUrl = '';
   let attachmentPreviewCurrent = null;
   let passwordPromptResolve = null;
@@ -162,6 +168,7 @@ const App = (() => {
     if (ensureScheduleColors()) needsSave = true;
     if (ensureScheduleWeekIds()) needsSave = true;
     if (ensureMeetingAttachments()) needsSave = true;
+    if (ensureLogAttachments()) needsSave = true;
     if (needsSave) await CryptoVault.saveEncrypted(pwd, data);
     return data;
   }
@@ -278,6 +285,8 @@ const App = (() => {
     $('#entry-tag-trivial').checked = false;
     $('#entry-type').value = getDefaultEntryType();
     renderKeyProjectPicker($('#entry-key-projects'), [], { projectSelect: $('#entry-project') });
+    entryFormAttachments = [];
+    renderEntryAttachmentsForm();
     setDateInputsToday();
   }
 
@@ -931,6 +940,19 @@ const App = (() => {
     $('#entry-cancel').addEventListener('click', closeEntryDialog);
     $('#entry-close').addEventListener('click', closeEntryDialog);
 
+    $('#entry-attachment-input').addEventListener('change', async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = '';
+      if (files.length) await addEntryFormAttachments(files);
+    });
+    $('#entry-form').addEventListener('paste', (e) => handleAttachmentFormPaste(e, addEntryFormAttachments));
+    $('#edit-attachment-input').addEventListener('change', async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = '';
+      if (files.length) await addEditFormAttachments(files);
+    });
+    $('#edit-form').addEventListener('paste', (e) => handleAttachmentFormPaste(e, addEditFormAttachments));
+
     ['click', 'keydown', 'mousemove'].forEach((ev) => {
       document.addEventListener(ev, resetIdleTimer, { passive: true });
     });
@@ -1120,10 +1142,10 @@ const App = (() => {
       closeAttachmentPreview();
     });
     $('#attachment-preview-download').addEventListener('click', () => {
-      if (attachmentPreviewCurrent) downloadMeetingAttachment(attachmentPreviewCurrent);
+      if (attachmentPreviewCurrent) downloadAttachment(attachmentPreviewCurrent);
     });
     $('#attachment-preview-newtab').addEventListener('click', () => {
-      if (attachmentPreviewCurrent) openMeetingAttachmentInNewTab(attachmentPreviewCurrent);
+      if (attachmentPreviewCurrent) openAttachmentInNewTab(attachmentPreviewCurrent);
     });
 
     $('#kp-form').addEventListener('submit', async (e) => {
@@ -1564,6 +1586,7 @@ const App = (() => {
       deadline: $('#entry-deadline').value || '',
       tags: readEntryTags(),
       keyProjectIds: readKeyProjectPicker($('#entry-key-projects')),
+      attachments: cloneAttachments(entryFormAttachments),
       timestamp: ts,
       date,
     });
@@ -2043,6 +2066,7 @@ const App = (() => {
       <p class="log-content">${linkifyText(log.content)}</p>
       ${log.purpose ? `<p class="log-purpose">目的：${linkifyText(log.purpose)}</p>` : ''}
       ${log.notes ? `<p class="log-notes">备注：${linkifyText(log.notes)}</p>` : ''}
+      ${renderAttachmentsBlockHtml(log.attachments)}
     `;
   }
 
@@ -2082,6 +2106,7 @@ const App = (() => {
       log.content,
       log.purpose ? `目的：${log.purpose}` : '',
       log.notes ? `备注：${log.notes}` : '',
+      log.attachments?.length ? `附件 ${log.attachments.length} 个` : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -2133,6 +2158,7 @@ const App = (() => {
     li.className = `log-item log-item--${view}`;
     const mainHtml = view === 'compact' ? logCompactMainHtml(log) : logDetailedMainHtml(log);
     li.innerHTML = `<div class="log-item-main">${mainHtml}</div>${logActionsHtml()}`;
+    bindAttachmentActions(li, log.attachments || []);
     li.querySelectorAll('.log-link').forEach((link) => {
       link.addEventListener('click', (e) => e.stopPropagation());
     });
@@ -2217,6 +2243,8 @@ const App = (() => {
     $('#edit-deadline').value = log.deadline || '';
     $('#edit-tag-trivial').checked = isTrivialLog(log);
     renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || [], { projectSelect: $('#edit-project') });
+    editFormAttachments = cloneAttachments(log.attachments);
+    renderEditAttachmentsForm();
     $('#edit-time').value = getLocalDatetimeInputValue(new Date(log.timestamp));
     $('#edit-dialog').showModal();
   }
@@ -2234,6 +2262,7 @@ const App = (() => {
     log.deadline = $('#edit-deadline').value || '';
     log.tags = readEditTags();
     log.keyProjectIds = readKeyProjectPicker($('#edit-key-projects'));
+    log.attachments = cloneAttachments(editFormAttachments);
     log.timestamp = ts;
     log.date = DateUtils.toDateKey(new Date(ts));
     await persist();
@@ -2708,6 +2737,18 @@ const App = (() => {
     return changed;
   }
 
+  function ensureLogAttachments() {
+    if (!data?.logs?.length) return false;
+    let changed = false;
+    data.logs.forEach((log) => {
+      if (!Array.isArray(log.attachments)) {
+        log.attachments = [];
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   function isImageMime(mime) {
     return typeof mime === 'string' && mime.startsWith('image/');
   }
@@ -2738,9 +2779,9 @@ const App = (() => {
     $('#attachment-preview-dialog')?.close();
   }
 
-  function showMeetingAttachmentPreview(att) {
+  function showAttachmentPreview(att) {
     if (!isImageMime(att.mimeType)) {
-      downloadMeetingAttachment(att);
+      downloadAttachment(att);
       return;
     }
     revokeAttachmentPreviewUrl();
@@ -2753,7 +2794,7 @@ const App = (() => {
     $('#attachment-preview-dialog').showModal();
   }
 
-  function openMeetingAttachmentInNewTab(att) {
+  function openAttachmentInNewTab(att) {
     const blob = attachmentToBlob(att);
     const url = URL.createObjectURL(blob);
     const win = window.open(url, '_blank', 'noopener,noreferrer');
@@ -2770,11 +2811,11 @@ const App = (() => {
     return `data:${mime};base64,${att.data}`;
   }
 
-  function cloneMeetingAttachments(attachments) {
+  function cloneAttachments(attachments) {
     return (attachments || []).map((att) => ({ ...att }));
   }
 
-  function readFileAsMeetingAttachment(file, nameOverride) {
+  function readFileAsAttachment(file, nameOverride) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -2795,26 +2836,26 @@ const App = (() => {
     });
   }
 
-  async function addMeetingFormAttachments(files) {
+  async function addAttachmentsFromFiles(files, targetList, rerender) {
     for (const file of files) {
       if (!file) continue;
-      if (file.size > MAX_MEETING_ATTACHMENT_BYTES) {
-        alert(`「${file.name}」超过 ${formatFileSize(MAX_MEETING_ATTACHMENT_BYTES)} 上限，已跳过。`);
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        alert(`「${file.name}」超过 ${formatFileSize(MAX_ATTACHMENT_BYTES)} 上限，已跳过。`);
         continue;
       }
       try {
-        const att = await readFileAsMeetingAttachment(file);
-        meetingFormAttachments.push(att);
+        const att = await readFileAsAttachment(file);
+        targetList.push(att);
       } catch {
         alert(`读取「${file.name}」失败，请重试。`);
       }
     }
-    renderMeetingAttachmentsForm();
+    rerender();
   }
 
-  async function handleMeetingFormPaste(e) {
+  function clipboardImageFilesFromPaste(e) {
     const items = e.clipboardData?.items;
-    if (!items?.length) return;
+    if (!items?.length) return [];
 
     const imageFiles = [];
     for (const item of items) {
@@ -2827,23 +2868,21 @@ const App = (() => {
       const name = `截图 ${stamped.getFullYear()}-${pad(stamped.getMonth() + 1)}-${pad(stamped.getDate())} ${pad(stamped.getHours())}${pad(stamped.getMinutes())}${pad(stamped.getSeconds())}.${ext}`;
       imageFiles.push(new File([blob], name, { type: blob.type || 'image/png' }));
     }
+    return imageFiles;
+  }
+
+  async function handleAttachmentFormPaste(e, addFilesFn) {
+    const imageFiles = clipboardImageFilesFromPaste(e);
     if (!imageFiles.length) return;
-
     e.preventDefault();
-    await addMeetingFormAttachments(imageFiles);
+    await addFilesFn(imageFiles);
   }
 
-  function removeMeetingFormAttachment(id) {
-    meetingFormAttachments = meetingFormAttachments.filter((att) => att.id !== id);
-    renderMeetingAttachmentsForm();
-  }
+  function renderAttachmentsList(listEl, attachments, onRemove) {
+    if (!listEl) return;
+    listEl.innerHTML = '';
 
-  function renderMeetingAttachmentsForm() {
-    const list = $('#mm-attachments-list');
-    if (!list) return;
-    list.innerHTML = '';
-
-    meetingFormAttachments.forEach((att) => {
+    attachments.forEach((att) => {
       const li = document.createElement('li');
       li.className = 'mm-attachment-item';
       li.innerHTML = `
@@ -2851,9 +2890,52 @@ const App = (() => {
         <div class="mm-attachment-preview">${renderAttachmentPreviewHtml(att)}</div>
         <div class="mm-attachment-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</div>
       `;
-      li.querySelector('.mm-attachment-remove').addEventListener('click', () => removeMeetingFormAttachment(att.id));
-      list.appendChild(li);
+      li.querySelector('.mm-attachment-remove').addEventListener('click', () => onRemove(att.id));
+      listEl.appendChild(li);
     });
+  }
+
+  async function addMeetingFormAttachments(files) {
+    await addAttachmentsFromFiles(files, meetingFormAttachments, renderMeetingAttachmentsForm);
+  }
+
+  async function addEntryFormAttachments(files) {
+    await addAttachmentsFromFiles(files, entryFormAttachments, renderEntryAttachmentsForm);
+  }
+
+  async function addEditFormAttachments(files) {
+    await addAttachmentsFromFiles(files, editFormAttachments, renderEditAttachmentsForm);
+  }
+
+  async function handleMeetingFormPaste(e) {
+    await handleAttachmentFormPaste(e, addMeetingFormAttachments);
+  }
+
+  function removeMeetingFormAttachment(id) {
+    meetingFormAttachments = meetingFormAttachments.filter((att) => att.id !== id);
+    renderMeetingAttachmentsForm();
+  }
+
+  function removeEntryFormAttachment(id) {
+    entryFormAttachments = entryFormAttachments.filter((att) => att.id !== id);
+    renderEntryAttachmentsForm();
+  }
+
+  function removeEditFormAttachment(id) {
+    editFormAttachments = editFormAttachments.filter((att) => att.id !== id);
+    renderEditAttachmentsForm();
+  }
+
+  function renderMeetingAttachmentsForm() {
+    renderAttachmentsList($('#mm-attachments-list'), meetingFormAttachments, removeMeetingFormAttachment);
+  }
+
+  function renderEntryAttachmentsForm() {
+    renderAttachmentsList($('#entry-attachments-list'), entryFormAttachments, removeEntryFormAttachment);
+  }
+
+  function renderEditAttachmentsForm() {
+    renderAttachmentsList($('#edit-attachments-list'), editFormAttachments, removeEditFormAttachment);
   }
 
   function renderAttachmentPreviewHtml(att) {
@@ -2863,7 +2945,7 @@ const App = (() => {
     return '<span class="mm-attachment-file-icon" aria-hidden="true">📄</span>';
   }
 
-  function downloadMeetingAttachment(att) {
+  function downloadAttachment(att) {
     const blob = attachmentToBlob(att);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -2872,15 +2954,15 @@ const App = (() => {
     URL.revokeObjectURL(a.href);
   }
 
-  function openMeetingAttachment(att) {
+  function openAttachment(att) {
     if (isImageMime(att.mimeType)) {
-      showMeetingAttachmentPreview(att);
+      showAttachmentPreview(att);
       return;
     }
-    downloadMeetingAttachment(att);
+    downloadAttachment(att);
   }
 
-  function renderMeetingAttachmentsCardHtml(attachments) {
+  function renderAttachmentsBlockHtml(attachments) {
     if (!attachments?.length) return '';
     const items = attachments
       .map(
@@ -2899,22 +2981,25 @@ const App = (() => {
       )
       .join('');
     return `
-      <div class="meeting-card-section">
-        <h4 class="meeting-card-label">附件 (${attachments.length})</h4>
+      <div class="attachments-block">
+        <h4 class="attachments-block-label">附件 (${attachments.length})</h4>
         <div class="meeting-card-attachments">${items}</div>
       </div>
     `;
   }
 
-  function bindMeetingAttachmentActions(card, meeting) {
-    const attachments = meeting.attachments || [];
-    attachments.forEach((att) => {
-      const wrap = card.querySelector(`[data-attachment-id="${att.id}"]`);
+  function bindAttachmentActions(container, attachments) {
+    (attachments || []).forEach((att) => {
+      const wrap = container.querySelector(`[data-attachment-id="${att.id}"]`);
       if (!wrap) return;
-      wrap.querySelector('.mm-attachment-preview')?.addEventListener('click', () => openMeetingAttachment(att));
-      wrap.querySelector('.btn-att-open')?.addEventListener('click', () => openMeetingAttachment(att));
-      wrap.querySelector('.btn-att-download')?.addEventListener('click', () => downloadMeetingAttachment(att));
+      wrap.querySelector('.mm-attachment-preview')?.addEventListener('click', () => openAttachment(att));
+      wrap.querySelector('.btn-att-open')?.addEventListener('click', () => openAttachment(att));
+      wrap.querySelector('.btn-att-download')?.addEventListener('click', () => downloadAttachment(att));
     });
+  }
+
+  function bindMeetingAttachmentActions(card, meeting) {
+    bindAttachmentActions(card, meeting.attachments);
   }
 
   function setMeetingFormTimeDefault() {
@@ -2955,7 +3040,7 @@ const App = (() => {
       participants: $('#mm-participants').value.trim(),
       content,
       todos: $('#mm-todos').value.trim(),
-      attachments: cloneMeetingAttachments(meetingFormAttachments),
+      attachments: cloneAttachments(meetingFormAttachments),
       timestamp: ts,
       date: DateUtils.toDateKey(new Date(ts)),
     };
@@ -2981,7 +3066,7 @@ const App = (() => {
     $('#mm-participants').value = meeting.participants || '';
     $('#mm-content').value = meeting.content || '';
     $('#mm-todos').value = meeting.todos || '';
-    meetingFormAttachments = cloneMeetingAttachments(meeting.attachments);
+    meetingFormAttachments = cloneAttachments(meeting.attachments);
     renderMeetingAttachmentsForm();
     const dt = new Date(meeting.timestamp);
     dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
@@ -3097,7 +3182,7 @@ const App = (() => {
             <h4 class="meeting-card-label">Todo</h4>
             ${renderMeetingTodosHtml(meeting.todos)}
           </div>
-          ${renderMeetingAttachmentsCardHtml(meeting.attachments)}
+          ${renderAttachmentsBlockHtml(meeting.attachments)}
         </div>
       `;
 

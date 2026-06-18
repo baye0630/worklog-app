@@ -2194,6 +2194,29 @@ body:has(#app:not(.hidden)) {
   font-size: var(--fs-xs);
 }
 
+.attachments-block {
+  margin-top: calc(12px * var(--ui-scale));
+}
+
+.attachments-block-label,
+.meeting-card-body .attachments-block-label {
+  margin: 0 0 calc(8px * var(--ui-scale));
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--apple-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.log-item-main .attachments-block {
+  margin-top: calc(14px * var(--ui-scale));
+}
+
+#entry-dialog .mm-attachments,
+#edit-dialog .mm-attachments {
+  margin-top: calc(4px * var(--ui-scale));
+}
+
 .attachment-preview-dialog {
   width: min(960px, calc(100vw - 48px));
   max-width: min(960px, calc(100vw - 48px));

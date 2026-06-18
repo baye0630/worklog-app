@@ -496,9 +496,9 @@ const App = (() => {
     return [...orphans].sort((a, b) => a.localeCompare(b, 'zh-CN'));
   }
 
-  function fillProjectSelect(el, { emptyLabel = '无', selected = '' } = {}) {
+  function fillProjectSelect(el, { emptyLabel = '无', selected } = {}) {
     if (!el) return;
-    const cur = selected || el.value;
+    const cur = selected !== undefined ? selected : el.value;
     el.innerHTML = `<option value="">${emptyLabel}</option>`;
     getProjectTags().forEach((tag) => {
       const opt = document.createElement('option');
@@ -512,7 +512,7 @@ const App = (() => {
       opt.textContent = `${tag}（已移除）`;
       el.appendChild(opt);
     });
-    if ([...el.options].some((o) => o.value === cur)) el.value = cur;
+    el.value = [...el.options].some((o) => o.value === cur) ? cur : '';
   }
 
   function refreshProjectSelects() {

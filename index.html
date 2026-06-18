@@ -433,6 +433,10 @@
         <option value="plan">计划（待办）</option>
       </select>
       <input type="datetime-local" id="entry-time" />
+      <div class="datetime-quick-actions">
+        <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="today">今天</button>
+        <button type="button" class="btn-secondary" data-datetime-target="entry-time" data-datetime-action="now">现在</button>
+      </div>
       <input type="text" id="entry-with-whom" placeholder="是和谁（可选）" />
       <label class="entry-field-label" for="entry-project">项目标签（可选）</label>
       <select id="entry-project"></select>
@@ -469,7 +473,13 @@
         <option value="waiting">等结果</option>
         <option value="plan">计划（待办）</option>
       </select>
-      <input type="datetime-local" id="edit-time" />
+      <div class="datetime-field">
+        <input type="datetime-local" id="edit-time" />
+        <div class="datetime-quick-actions">
+          <button type="button" class="btn-secondary" data-datetime-target="edit-time" data-datetime-action="today">今天</button>
+          <button type="button" class="btn-secondary" data-datetime-target="edit-time" data-datetime-action="now">现在</button>
+        </div>
+      </div>
       <input type="text" id="edit-with-whom" placeholder="是和谁（可选）" />
       <label class="entry-field-label" for="edit-project">项目标签（可选）</label>
       <select id="edit-project"></select>

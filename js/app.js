@@ -170,6 +170,7 @@ const App = (() => {
     updateTrivialFilterSwitch();
     updateWaitingFeatureControls();
     bindEvents();
+    bindDatetimeQuickActions();
     switchView('timeline');
     renderAll();
     scrollTimelineToToday(false);
@@ -182,9 +183,40 @@ const App = (() => {
     const weekEnd = DateUtils.endOfWeek(weekStart);
     $('#summary-week-start').value = DateUtils.toDateKey(weekStart);
     $('#summary-week-end').value = DateUtils.toDateKey(weekEnd);
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    $('#entry-time').value = now.toISOString().slice(0, 16);
+    setDatetimeInputNow($('#entry-time'));
+  }
+
+  function getLocalDatetimeInputValue(d = new Date()) {
+    const dt = new Date(d);
+    dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
+    return dt.toISOString().slice(0, 16);
+  }
+
+  function setDatetimeInputToday(inputEl) {
+    if (!inputEl) return;
+    const today = DateUtils.toDateKey(new Date());
+    if (inputEl.value) {
+      const timePart = inputEl.value.split('T')[1] || getLocalDatetimeInputValue().split('T')[1];
+      inputEl.value = `${today}T${timePart}`;
+    } else {
+      inputEl.value = getLocalDatetimeInputValue();
+    }
+  }
+
+  function setDatetimeInputNow(inputEl) {
+    if (!inputEl) return;
+    inputEl.value = getLocalDatetimeInputValue(new Date());
+  }
+
+  function bindDatetimeQuickActions() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-datetime-action]');
+      if (!btn) return;
+      const input = document.getElementById(btn.dataset.datetimeTarget);
+      if (!input) return;
+      if (btn.dataset.datetimeAction === 'today') setDatetimeInputToday(input);
+      else if (btn.dataset.datetimeAction === 'now') setDatetimeInputNow(input);
+    });
   }
 
   function isTrivialLog(log) {
@@ -1962,9 +1994,7 @@ const App = (() => {
     $('#edit-deadline').value = log.deadline || '';
     $('#edit-tag-trivial').checked = isTrivialLog(log);
     renderKeyProjectPicker($('#edit-key-projects'), log.keyProjectIds || []);
-    const dt = new Date(log.timestamp);
-    dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
-    $('#edit-time').value = dt.toISOString().slice(0, 16);
+    $('#edit-time').value = getLocalDatetimeInputValue(new Date(log.timestamp));
     $('#edit-dialog').showModal();
   }
 

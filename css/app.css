@@ -2901,6 +2901,34 @@ dialog .entry-tag-check input[type='checkbox'] {
   margin-top: 20px;
 }
 
+.datetime-field {
+  margin-bottom: 10px;
+}
+
+.datetime-field input[type='datetime-local'] {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--apple-border-strong);
+  border-radius: var(--apple-radius-sm);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  box-sizing: border-box;
+}
+
+.datetime-quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.datetime-quick-actions .btn-secondary {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: var(--fs-sm);
+}
+
 .password-prompt-message {
   margin: 0 0 calc(16px * var(--ui-scale));
   font-size: var(--fs-body);

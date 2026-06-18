@@ -78,6 +78,7 @@
       </div>
       <nav class="nav">
         <button class="nav-item active" data-view="timeline">时间线</button>
+        <button class="nav-item" data-view="far-plans">遥远计划</button>
         <button class="nav-item" data-view="summary">总结</button>
         <button class="nav-item" data-view="calendar">月历</button>
         <button class="nav-item" data-view="schedules">固定日程</button>
@@ -355,6 +356,21 @@
         <p id="kp-empty" class="empty hidden">暂无关键项目，请先创建项目组。</p>
       </section>
 
+      <!-- 遥远计划 -->
+      <section id="view-far-plans" class="view hidden">
+        <h2 class="view-hero-title">遥远的未来计划</h2>
+        <p class="view-hero-subtitle">暂不显示在时间线；在时间线中右键「计划」可移入此处，左键可移回计划。</p>
+        <div class="filter-bar far-plans-toolbar">
+          <label for="far-filter-project">项目</label>
+          <select id="far-filter-project">
+            <option value="">全部</option>
+          </select>
+          <span id="far-plans-count" class="far-plans-count"></span>
+        </div>
+        <ul id="far-plans-list" class="log-list far-plans-list"></ul>
+        <p id="far-plans-empty" class="empty hidden">暂无遥远计划任务</p>
+      </section>
+
       <!-- 设置 -->
       <section id="view-settings" class="view hidden">
         <h2 class="view-hero-title">设置</h2>
@@ -397,6 +413,7 @@
               <option value="doing">进行中</option>
               <option value="waiting">等结果</option>
               <option value="plan">计划（待办）</option>
+              <option value="far">遥远的未来计划</option>
             </select>
           </div>
           <div class="entry-field-order-settings">
@@ -443,6 +460,7 @@
             <option value="doing">进行中</option>
             <option value="waiting">等结果</option>
             <option value="plan">计划（待办）</option>
+            <option value="far">遥远的未来计划</option>
           </select>
         </div>
         <div class="entry-field-block" data-entry-field="time">
@@ -500,6 +518,7 @@
         <option value="doing">进行中</option>
         <option value="waiting">等结果</option>
         <option value="plan">计划（待办）</option>
+        <option value="far">遥远的未来计划</option>
       </select>
       <div class="datetime-field">
         <input type="datetime-local" id="edit-time" />

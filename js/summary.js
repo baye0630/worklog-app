@@ -6,7 +6,7 @@
 
 const SummaryEngine = (() => {
 
-  const TYPE_LABELS = { done: '已完成', doing: '进行中', waiting: '等结果', plan: '计划' };
+  const TYPE_LABELS = { done: '已完成', doing: '进行中', waiting: '等结果', plan: '计划', far: '遥远的未来计划' };
 
   const LOG_TAG_OPTIONS = ['琐碎任务'];
 

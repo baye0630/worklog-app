@@ -22,6 +22,7 @@
   --type-done: #34c759;
   --type-doing: #ff9500;
   --type-plan: #5856d6;
+  --type-far: #7c7caa;
   --danger: #ff3b30;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -675,6 +676,22 @@ body:has(#app:not(.hidden)) {
   color: var(--type-plan);
 }
 
+.far-plans-toolbar {
+  margin-bottom: calc(20px * var(--ui-scale));
+}
+
+.far-plans-count {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--apple-text-secondary);
+}
+
+.far-plans-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--ui-scale));
+}
+
 .filter-bar {
   display: flex;
   align-items: center;
@@ -1203,6 +1220,11 @@ body:has(#app:not(.hidden)) {
 .type-plan {
   background: rgba(88, 86, 214, 0.12);
   color: #4240a8;
+}
+
+.type-far {
+  background: rgba(124, 124, 170, 0.14);
+  color: #5a5a82;
 }
 
 .log-content {

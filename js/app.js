@@ -23,6 +23,7 @@ const App = (() => {
   ];
   const TRIVIAL_TAG = '琐碎任务';
   const MEETING_TIMELINE_TAG = '会议纪要';
+  const LOG_TYPES = ['done', 'doing', 'waiting', 'plan', 'far'];
   const MAX_MEETING_ATTACHMENT_BYTES = 5 * 1024 * 1024;
   const DEFAULT_ENTRY_FIELD_ORDER = [
     'type',
@@ -336,7 +337,7 @@ const App = (() => {
       data.settings.waitingFeatureEnabled = false;
       changed = true;
     }
-    if (!['done', 'doing', 'waiting', 'plan'].includes(data.settings.defaultEntryType)) {
+    if (!LOG_TYPES.includes(data.settings.defaultEntryType)) {
       data.settings.defaultEntryType = 'done';
       changed = true;
     }
@@ -438,9 +439,11 @@ const App = (() => {
   }
 
   function getDefaultEntryType() {
-    return ['done', 'doing', 'waiting', 'plan'].includes(data?.settings?.defaultEntryType)
-      ? data.settings.defaultEntryType
-      : 'done';
+    return LOG_TYPES.includes(data?.settings?.defaultEntryType) ? data.settings.defaultEntryType : 'done';
+  }
+
+  function excludeFarLogs(logs) {
+    return logs.filter((l) => l.type !== 'far');
   }
 
   function setWaitingOptionVisibility(select, enabled) {
@@ -520,6 +523,10 @@ const App = (() => {
     fillProjectSelect($('#entry-project'), { emptyLabel: '无' });
     fillProjectSelect($('#edit-project'), { emptyLabel: '无' });
     fillProjectSelect($('#filter-project'), { emptyLabel: '全部' });
+    fillProjectSelect($('#far-filter-project'), {
+      emptyLabel: '全部',
+      selected: $('#far-filter-project')?.value || '',
+    });
   }
 
   function renderProjectTagList() {
@@ -944,6 +951,7 @@ const App = (() => {
     $('#filter-type').addEventListener('change', renderTimeline);
     $('#filter-project').addEventListener('change', renderTimeline);
     $('#filter-date').addEventListener('change', renderTimeline);
+    $('#far-filter-project')?.addEventListener('change', renderFarPlans);
     $('#filter-trivial').addEventListener('click', () => cycleTimelineTrivialFilter());
     $('#default-entry-type').addEventListener('change', async (e) => {
       normalizeProjectTags();
@@ -1327,6 +1335,10 @@ const App = (() => {
       refreshKeyProjectDefaultTagSelect();
       renderKeyProjects();
     }
+    if (view === 'far-plans') {
+      refreshProjectSelects();
+      renderFarPlans();
+    }
     if (view === 'settings') {
       renderProjectTagList();
       refreshProjectSelects();
@@ -1429,6 +1441,33 @@ const App = (() => {
     renderScheduleList();
     renderMeetingList();
     renderKeyProjects();
+    renderFarPlans();
+  }
+
+  function refreshAfterLogChange() {
+    renderTimeline();
+    if (currentView === 'key-projects') renderKeyProjects();
+    if (currentView === 'far-plans') renderFarPlans();
+    if (currentView === 'calendar') renderCalendar();
+  }
+
+  function getFarPlanLogs() {
+    const projectFilter = $('#far-filter-project')?.value || '';
+    let logs = data.logs.filter((l) => l.type === 'far');
+    if (projectFilter) logs = logs.filter((l) => l.project === projectFilter);
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  function renderFarPlans() {
+    const logs = getFarPlanLogs();
+    const list = $('#far-plans-list');
+    const empty = $('#far-plans-empty');
+    const countEl = $('#far-plans-count');
+    if (!list || !empty) return;
+    list.innerHTML = '';
+    logs.forEach((log) => list.appendChild(createLogItem(log, 'detailed')));
+    empty.classList.toggle('hidden', logs.length > 0);
+    if (countEl) countEl.textContent = logs.length ? `共 ${logs.length} 项` : '';
   }
 
   function escapeHtml(str) {
@@ -1537,6 +1576,7 @@ const App = (() => {
     if (currentView === 'calendar') renderCalendar();
     if (currentView === 'schedules') renderScheduleList();
     if (currentView === 'key-projects') renderKeyProjects();
+    if (currentView === 'far-plans') renderFarPlans();
   }
 
   function resetMainScroll() {
@@ -1869,11 +1909,11 @@ const App = (() => {
     const ctx = getTimelineFilterContext();
     const { typeFilter } = ctx;
     const waitingEnabled = isWaitingFeatureEnabled();
-    let scopeLogs = applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false });
+    let scopeLogs = excludeFarLogs(applyTimelineLogFilters([...data.logs], ctx, { includeTypeFilter: false }));
     if (!waitingEnabled) scopeLogs = scopeLogs.filter((l) => l.type !== 'waiting');
     const headerStats = computeTimelineHeaderStats(scopeLogs, ctx);
     const waitingLogs = waitingEnabled ? scopeLogs.filter((l) => l.type === 'waiting') : [];
-    let logs = applyTimelineLogFilters([...data.logs], ctx);
+    let logs = excludeFarLogs(applyTimelineLogFilters([...data.logs], ctx));
     if (!waitingEnabled || !ctx.typeFilter) logs = logs.filter((l) => l.type !== 'waiting');
     logs = [...logs, ...getMeetingTimelineEntries(ctx)];
 
@@ -2123,7 +2163,16 @@ const App = (() => {
     } else if (log.type === 'plan') {
       setupStatusBadge(li.querySelector('.type-plan'), li, {
         onClick: () => startPlanLog(log.id),
+        onRevert: () => revertPlanToFarLog(log.id),
         clickLabel: '标记为进行中',
+        revertLabel: '移至遥远计划',
+        itemClass: 'log-item--quick-start',
+        triggerClass: 'log-quick-start-trigger',
+      });
+    } else if (log.type === 'far') {
+      setupStatusBadge(li.querySelector('.type-far'), li, {
+        onClick: () => promoteFarToPlanLog(log.id),
+        clickLabel: '移回计划',
         itemClass: 'log-item--quick-start',
         triggerClass: 'log-quick-start-trigger',
       });
@@ -2189,8 +2238,7 @@ const App = (() => {
     log.date = DateUtils.toDateKey(new Date(ts));
     await persist();
     $('#edit-dialog').close();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function completeDoingLog(id) {
@@ -2198,8 +2246,7 @@ const App = (() => {
     if (!log || log.type !== 'doing') return;
     log.type = 'done';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function startPlanLog(id) {
@@ -2207,8 +2254,7 @@ const App = (() => {
     if (!log || log.type !== 'plan') return;
     log.type = 'doing';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function completeWaitingLog(id) {
@@ -2216,8 +2262,7 @@ const App = (() => {
     if (!log || log.type !== 'waiting') return;
     log.type = 'done';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function revertDoneLog(id) {
@@ -2225,8 +2270,7 @@ const App = (() => {
     if (!log || log.type !== 'done') return;
     log.type = 'doing';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function revertDoingLog(id) {
@@ -2234,8 +2278,7 @@ const App = (() => {
     if (!log || log.type !== 'doing') return;
     log.type = 'plan';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
   }
 
   async function revertWaitingLog(id) {
@@ -2243,15 +2286,30 @@ const App = (() => {
     if (!log || log.type !== 'waiting') return;
     log.type = 'doing';
     await persist();
-    renderTimeline();
-    if (currentView === 'key-projects') renderKeyProjects();
+    refreshAfterLogChange();
+  }
+
+  async function revertPlanToFarLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'plan') return;
+    log.type = 'far';
+    await persist();
+    refreshAfterLogChange();
+  }
+
+  async function promoteFarToPlanLog(id) {
+    const log = data.logs.find((l) => l.id === id);
+    if (!log || log.type !== 'far') return;
+    log.type = 'plan';
+    await persist();
+    refreshAfterLogChange();
   }
 
   async function deleteLog(id) {
     if (!confirm('确定删除这条记录？')) return;
     data.logs = data.logs.filter((l) => l.id !== id);
     await persist();
-    renderTimeline();
+    refreshAfterLogChange();
   }
 
   function getSummaryDateKey() {
@@ -2487,7 +2545,7 @@ const App = (() => {
       });
     }
 
-    const dayLogs = data.logs.filter((l) => l.date === dateKey);
+    const dayLogs = data.logs.filter((l) => l.date === dateKey && l.type !== 'far');
     const logEl = $('#cal-day-logs');
     if (!dayLogs.length) {
       logEl.innerHTML = '<h4>当日日志</h4><p class="hint">无记录</p>';

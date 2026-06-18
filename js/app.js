@@ -178,6 +178,10 @@ const App = (() => {
   function setDateInputsToday() {
     const today = DateUtils.toDateKey(new Date());
     $('#summary-date').value = today;
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
+    $('#summary-week-start').value = DateUtils.toDateKey(weekStart);
+    $('#summary-week-end').value = DateUtils.toDateKey(weekEnd);
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     $('#entry-time').value = now.toISOString().slice(0, 16);
@@ -804,20 +808,40 @@ const App = (() => {
         $$('.tab[data-summary]').forEach((t) => t.classList.remove('active'));
         tab.classList.add('active');
         summaryMode = tab.dataset.summary;
+        if (summaryMode === 'weekly') ensureSummaryWeekRangeInputs();
+        updateSummaryDateNav();
         renderSummary();
       });
     });
 
     $('#summary-prev').addEventListener('click', async () => {
       await flushSummaryToStorage();
-      shiftSummaryDate(summaryMode === 'daily' ? -1 : -7);
+      shiftSummaryDate(-1);
     });
     $('#summary-next').addEventListener('click', async () => {
       await flushSummaryToStorage();
-      shiftSummaryDate(summaryMode === 'daily' ? 1 : 7);
+      shiftSummaryDate(1);
+    });
+    $('#summary-week-prev').addEventListener('click', async () => {
+      await flushSummaryToStorage();
+      shiftSummaryWeekRange(-getSummaryRangeDayCount());
+    });
+    $('#summary-week-next').addEventListener('click', async () => {
+      await flushSummaryToStorage();
+      shiftSummaryWeekRange(getSummaryRangeDayCount());
     });
     $('#summary-date').addEventListener('change', async () => {
       await flushSummaryToStorage();
+      renderSummary();
+    });
+    $('#summary-week-start').addEventListener('change', async () => {
+      await flushSummaryToStorage();
+      normalizeSummaryWeekRange();
+      renderSummary();
+    });
+    $('#summary-week-end').addEventListener('change', async () => {
+      await flushSummaryToStorage();
+      normalizeSummaryWeekRange();
       renderSummary();
     });
 
@@ -832,7 +856,7 @@ const App = (() => {
       if (isSummaryDirty() && !confirm('重新生成将覆盖当前修改，是否继续？')) return;
       await flushSummaryToStorage();
       if (summaryMode === 'daily') delete data.dailySummaries[getSummaryDateKey()];
-      else delete data.weeklySummaries[getWeekId()];
+      else delete data.weeklySummaries[getWeeklySummaryStorageId()];
       await persist();
       renderSummary();
     });
@@ -948,7 +972,7 @@ const App = (() => {
   }
 
   function getSummaryStorageKey() {
-    return summaryMode === 'daily' ? `daily:${getSummaryDateKey()}` : `weekly:${getWeekId()}`;
+    return summaryMode === 'daily' ? `daily:${getSummaryDateKey()}` : `weekly:${getWeeklySummaryStorageId()}`;
   }
 
   function writeSummaryByKey(key, text) {
@@ -1118,6 +1142,7 @@ const App = (() => {
       updateDefaultEntryTypeSelect();
     }
     if (view === 'summary') {
+      updateSummaryDateNav();
       renderSummary();
       setSummaryMdView(summaryMdView);
     }
@@ -2002,14 +2027,87 @@ const App = (() => {
     return $('#summary-date').value || DateUtils.toDateKey(new Date());
   }
 
-  function getWeekId() {
-    const d = DateUtils.parseDateKey(getSummaryDateKey());
-    return DateUtils.getISOWeekInfo(DateUtils.startOfWeek(d)).weekId;
+  function getDefaultWeekRange() {
+    const weekStart = DateUtils.startOfWeek(new Date());
+    const weekEnd = DateUtils.endOfWeek(weekStart);
+    return {
+      start: DateUtils.toDateKey(weekStart),
+      end: DateUtils.toDateKey(weekEnd),
+    };
+  }
+
+  function ensureSummaryWeekRangeInputs() {
+    const startEl = $('#summary-week-start');
+    const endEl = $('#summary-week-end');
+    if (!startEl?.value || !endEl?.value) {
+      const { start, end } = getDefaultWeekRange();
+      startEl.value = start;
+      endEl.value = end;
+    }
+  }
+
+  function normalizeSummaryWeekRange() {
+    const startEl = $('#summary-week-start');
+    const endEl = $('#summary-week-end');
+    if (!startEl || !endEl) return;
+    if (!startEl.value) startEl.value = getDefaultWeekRange().start;
+    if (!endEl.value) endEl.value = getDefaultWeekRange().end;
+    if (endEl.value < startEl.value) endEl.value = startEl.value;
+  }
+
+  function getSummaryWeekStart() {
+    return $('#summary-week-start')?.value || getDefaultWeekRange().start;
+  }
+
+  function getSummaryWeekEnd() {
+    return $('#summary-week-end')?.value || getDefaultWeekRange().end;
+  }
+
+  function getSummaryRangeDayCount() {
+    normalizeSummaryWeekRange();
+    const start = DateUtils.parseDateKey(getSummaryWeekStart());
+    const end = DateUtils.parseDateKey(getSummaryWeekEnd());
+    return Math.round((end - start) / 86400000) + 1;
+  }
+
+  function getWeeklySummaryStorageId() {
+    normalizeSummaryWeekRange();
+    return `${getSummaryWeekStart()}_${getSummaryWeekEnd()}`;
+  }
+
+  function getWeeklySummarySavedText() {
+    const id = getWeeklySummaryStorageId();
+    if (data.weeklySummaries[id]) return data.weeklySummaries[id];
+
+    const start = getSummaryWeekStart();
+    const end = getSummaryWeekEnd();
+    const isoWeekStart = DateUtils.toDateKey(DateUtils.startOfWeek(DateUtils.parseDateKey(start)));
+    const isoWeekEnd = DateUtils.toDateKey(DateUtils.endOfWeek(DateUtils.parseDateKey(start)));
+    if (start === isoWeekStart && end === isoWeekEnd) {
+      const weekId = DateUtils.getISOWeekInfo(DateUtils.parseDateKey(start)).weekId;
+      return data.weeklySummaries[weekId] || null;
+    }
+    return null;
+  }
+
+  function updateSummaryDateNav() {
+    const isWeekly = summaryMode === 'weekly';
+    $('#summary-daily-date-nav')?.classList.toggle('hidden', isWeekly);
+    $('#summary-weekly-date-nav')?.classList.toggle('hidden', !isWeekly);
   }
 
   function shiftSummaryDate(delta) {
     const d = DateUtils.parseDateKey(getSummaryDateKey());
     $('#summary-date').value = DateUtils.toDateKey(DateUtils.addDays(d, delta));
+    renderSummary();
+  }
+
+  function shiftSummaryWeekRange(deltaDays) {
+    normalizeSummaryWeekRange();
+    const start = getSummaryWeekStart();
+    const end = getSummaryWeekEnd();
+    $('#summary-week-start').value = DateUtils.toDateKey(DateUtils.addDays(DateUtils.parseDateKey(start), deltaDays));
+    $('#summary-week-end').value = DateUtils.toDateKey(DateUtils.addDays(DateUtils.parseDateKey(end), deltaDays));
     renderSummary();
   }
 
@@ -2032,13 +2130,16 @@ const App = (() => {
         );
       }
     } else {
-      const weekId = getWeekId();
-      if (data.weeklySummaries[weekId]) {
-        text = data.weeklySummaries[weekId];
+      normalizeSummaryWeekRange();
+      const rangeStart = getSummaryWeekStart();
+      const rangeEnd = getSummaryWeekEnd();
+      const saved = getWeeklySummarySavedText();
+      if (saved) {
+        text = saved;
       } else {
-        const weekStart = DateUtils.startOfWeek(DateUtils.parseDateKey(dateKey));
         text = SummaryEngine.generateWeekly(
-          weekStart,
+          rangeStart,
+          rangeEnd,
           summaryLogs,
           data.schedules,
           data.scheduleCompletions
@@ -2059,7 +2160,7 @@ const App = (() => {
     const name =
       summaryMode === 'daily'
         ? `日报-${getSummaryDateKey()}.md`
-        : `周报-${getWeekId()}.md`;
+        : `周报-${getWeeklySummaryStorageId()}.md`;
     downloadFile(name, text, 'text/markdown');
   }
 

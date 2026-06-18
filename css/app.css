@@ -611,6 +611,15 @@ body:has(#app:not(.hidden)) {
   color: var(--apple-text);
 }
 
+.date-nav--range input[type='date'] {
+  min-width: calc(132px * var(--ui-scale));
+}
+
+.date-range-sep {
+  color: var(--apple-text-secondary);
+  font-size: var(--fs-body);
+}
+
 .date-label {
   color: var(--apple-text-secondary);
   font-size: var(--fs-body);

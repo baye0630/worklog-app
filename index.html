@@ -151,10 +151,17 @@
             <button class="tab active" data-summary="daily">每日总结</button>
             <button class="tab" data-summary="weekly">每周总结</button>
           </div>
-          <div class="date-nav">
+          <div class="date-nav" id="summary-daily-date-nav">
             <button id="summary-prev" class="btn-icon">‹</button>
             <input type="date" id="summary-date" />
             <button id="summary-next" class="btn-icon">›</button>
+          </div>
+          <div class="date-nav date-nav--range hidden" id="summary-weekly-date-nav">
+            <button id="summary-week-prev" class="btn-icon">‹</button>
+            <input type="date" id="summary-week-start" aria-label="开始日期" />
+            <span class="date-range-sep">至</span>
+            <input type="date" id="summary-week-end" aria-label="结束日期" />
+            <button id="summary-week-next" class="btn-icon">›</button>
           </div>
           <div class="action-bar">
             <span id="summary-save-status" class="summary-save-status"></span>

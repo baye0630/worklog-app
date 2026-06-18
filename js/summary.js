@@ -232,22 +232,6 @@ const SummaryEngine = (() => {
 
 
 
-  function getLogsForWeek(logs, weekStart) {
-
-    const keys = [];
-
-    for (let i = 0; i < 7; i++) {
-
-      keys.push(DateUtils.toDateKey(DateUtils.addDays(weekStart, i)));
-
-    }
-
-    return logs.filter((l) => keys.includes(l.date));
-
-  }
-
-
-
   function generateDaily(dateKey, logs, schedules, completions) {
 
     const dayLogs = getLogsForDate(logs, dateKey);
@@ -322,13 +306,21 @@ const SummaryEngine = (() => {
 
 
 
-  function generateWeekly(weekStart, logs, schedules, completions) {
+  function getLogsForDateRange(logs, startKey, endKey) {
 
-    const weekLogs = getLogsForWeek(logs, weekStart);
+    return logs.filter((l) => l.date >= startKey && l.date <= endKey);
 
-    const weekEnd = DateUtils.endOfWeek(weekStart);
+  }
 
-    const { weekId } = DateUtils.getISOWeekInfo(weekStart);
+
+
+  function generateWeekly(rangeStartKey, rangeEndKey, logs, schedules, completions) {
+
+    const rangeStart = DateUtils.parseDateKey(rangeStartKey);
+
+    const rangeEnd = DateUtils.parseDateKey(rangeEndKey);
+
+    const weekLogs = getLogsForDateRange(logs, rangeStartKey, rangeEndKey);
 
     const done = weekLogs.filter((l) => l.type === 'done');
 
@@ -342,9 +334,9 @@ const SummaryEngine = (() => {
 
     const weekScheduleItems = [];
 
-    for (let i = 0; i < 7; i++) {
+    for (let cursor = new Date(rangeStart); cursor <= rangeEnd; cursor = DateUtils.addDays(cursor, 1)) {
 
-      const dk = DateUtils.toDateKey(DateUtils.addDays(weekStart, i));
+      const dk = DateUtils.toDateKey(cursor);
 
       ScheduleLogic.getSchedulesForDate(schedules, dk).forEach((s) => {
 
@@ -358,7 +350,23 @@ const SummaryEngine = (() => {
 
 
 
-    let md = `## ${weekId} 工作周报（${DateUtils.formatShort(weekStart)} - ${DateUtils.formatShort(weekEnd)}）\n\n`;
+    const isoWeekStart = DateUtils.startOfWeek(rangeStart);
+
+    const isoWeekEnd = DateUtils.endOfWeek(isoWeekStart);
+
+    const isIsoWeek =
+
+      rangeStartKey === DateUtils.toDateKey(isoWeekStart) &&
+
+      rangeEndKey === DateUtils.toDateKey(isoWeekEnd);
+
+    const { weekId } = DateUtils.getISOWeekInfo(rangeStart);
+
+    const titlePrefix = isIsoWeek ? `${weekId} ` : '';
+
+
+
+    let md = `## ${titlePrefix}工作周报（${DateUtils.formatShort(rangeStart)} - ${DateUtils.formatShort(rangeEnd)}）\n\n`;
 
     md += `### 本周成果概览\n${buildOverviewLines(done, '本周').join('\n')}\n\n`;
 

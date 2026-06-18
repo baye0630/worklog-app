@@ -886,16 +886,15 @@ const App = (() => {
       await addLog();
     });
 
+    $('#entry-form').addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      e.preventDefault();
+      e.currentTarget.requestSubmit();
+    });
+
     const closeEntryDialog = () => $('#entry-dialog').close();
     $('#entry-cancel').addEventListener('click', closeEntryDialog);
     $('#entry-close').addEventListener('click', closeEntryDialog);
-
-    $('#entry-content').addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        $('#entry-form').requestSubmit();
-      }
-    });
 
     ['click', 'keydown', 'mousemove'].forEach((ev) => {
       document.addEventListener(ev, resetIdleTimer, { passive: true });

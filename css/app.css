@@ -2803,10 +2803,19 @@ body:has(#app:not(.hidden)) {
 }
 
 /* —— Dialog —— */
+#entry-dialog.entry-dialog,
+#edit-dialog {
+  width: min(2160px, calc(100vw - 48px));
+  max-width: min(2160px, calc(100vw - 48px));
+}
+
+#edit-dialog {
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+
 #entry-dialog.entry-dialog {
   --entry-dialog-radius: calc(16px * var(--ui-scale));
-  width: min(720px, calc(100vw - 64px));
-  max-width: min(720px, calc(100vw - 64px));
   height: min(760px, calc(100vh - 64px));
   max-height: calc(100vh - 64px);
   padding: 0;

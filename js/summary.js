@@ -232,7 +232,7 @@ const SummaryEngine = (() => {
 
 
 
-  function generateDaily(dateKey, logs, schedules, completions) {
+  function generateDaily(dateKey, logs, schedules, completions, cancellations) {
 
     const dayLogs = getLogsForDate(logs, dateKey);
 
@@ -246,7 +246,7 @@ const SummaryEngine = (() => {
 
 
 
-    const scheduleLines = ScheduleLogic.getSchedulesForDate(schedules, dateKey)
+    const scheduleLines = ScheduleLogic.getSchedulesForDate(schedules, dateKey, cancellations)
 
       .filter((s) => s.reminder !== false)
 
@@ -314,7 +314,7 @@ const SummaryEngine = (() => {
 
 
 
-  function generateWeekly(rangeStartKey, rangeEndKey, logs, schedules, completions) {
+  function generateWeekly(rangeStartKey, rangeEndKey, logs, schedules, completions, cancellations) {
 
     const rangeStart = DateUtils.parseDateKey(rangeStartKey);
 
@@ -338,7 +338,7 @@ const SummaryEngine = (() => {
 
       const dk = DateUtils.toDateKey(cursor);
 
-      ScheduleLogic.getSchedulesForDate(schedules, dk).forEach((s) => {
+      ScheduleLogic.getSchedulesForDate(schedules, dk, cancellations).forEach((s) => {
 
         const ok = completions.some((c) => c.scheduleId === s.id && c.date === dk && c.completed);
 
@@ -440,11 +440,19 @@ const SummaryEngine = (() => {
 
 const ScheduleLogic = (() => {
 
-  function getSchedulesForDate(schedules, dateKey) {
+  function getSchedulesForDate(schedules, dateKey, cancellations) {
 
     const d = DateUtils.parseDateKey(dateKey);
 
-    return schedules.filter((s) => matchesDate(s, d));
+    const cancelledIds = cancellations?.length
+      ? new Set(cancellations.filter((c) => c.date === dateKey).map((c) => c.scheduleId))
+      : null;
+
+    return schedules.filter((s) => {
+      if (!matchesDate(s, d)) return false;
+      if (cancelledIds?.has(s.id)) return false;
+      return true;
+    });
 
   }
 

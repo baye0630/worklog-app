@@ -1762,9 +1762,29 @@ body:has(#app:not(.hidden)) {
 }
 
 .cal-schedule-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
   margin-bottom: calc(14px * var(--ui-scale));
   padding-left: calc(10px * var(--ui-scale));
   border-left: calc(3px * var(--ui-scale)) solid var(--schedule-color, var(--apple-blue));
+}
+
+.cal-schedule-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-schedule-cancel {
+  flex-shrink: 0;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.timeline-schedule-item.cal-schedule-item {
+  margin-bottom: 0;
 }
 
 .cal-schedule-item .checkbox-label {
@@ -2914,12 +2934,20 @@ body:has(#app:not(.hidden)) {
     var(--apple-shadow-lg);
 }
 
-#entry-dialog .entry-dialog-body {
+#entry-dialog .entry-dialog-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: inherit;
-  padding: calc(32px * var(--ui-scale)) calc(36px * var(--ui-scale));
+  overflow: hidden;
+}
+
+#entry-dialog .entry-dialog-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: calc(20px * var(--ui-scale)) calc(36px * var(--ui-scale)) calc(32px * var(--ui-scale));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2929,8 +2957,10 @@ body:has(#app:not(.hidden)) {
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--ui-scale));
-  margin-bottom: calc(20px * var(--ui-scale));
   flex-shrink: 0;
+  padding: calc(32px * var(--ui-scale)) calc(36px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border-bottom: 1px solid var(--apple-border);
+  background: var(--apple-surface);
 }
 
 #entry-dialog .entry-dialog-header h3 {

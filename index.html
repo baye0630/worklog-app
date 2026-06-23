@@ -447,11 +447,12 @@
 
   <!-- 快速录入弹窗 -->
   <dialog id="entry-dialog" class="entry-dialog">
-    <form id="entry-form" class="entry-dialog-body" method="dialog">
+    <div class="entry-dialog-shell">
       <div class="entry-dialog-header">
         <h3>快速录入</h3>
         <button type="button" id="entry-close" class="btn-icon entry-dialog-close" aria-label="关闭">×</button>
       </div>
+      <form id="entry-form" class="entry-dialog-body" method="dialog">
       <textarea id="entry-content" rows="3" placeholder="记录你在做什么 / 完成了什么…" required></textarea>
       <div id="entry-fields-host">
         <div class="entry-field-block" data-entry-field="type">
@@ -519,6 +520,7 @@
         <button type="submit" class="btn-primary">保存记录</button>
       </div>
     </form>
+    </div>
   </dialog>
 
   <!-- 编辑弹窗 -->

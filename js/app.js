@@ -54,6 +54,7 @@ const App = (() => {
     logs: [],
     schedules: [],
     scheduleCompletions: [],
+    scheduleCancellations: [],
     meetings: [],
     keyProjects: [],
     dailySummaries: {},
@@ -157,6 +158,7 @@ const App = (() => {
     data.logs = data.logs || [];
     data.schedules = data.schedules || [];
     data.scheduleCompletions = data.scheduleCompletions || [];
+    data.scheduleCancellations = data.scheduleCancellations || [];
     data.meetings = data.meetings || [];
     data.keyProjects = data.keyProjects || [];
     migrateKeyProjectIds();
@@ -1692,10 +1694,55 @@ const App = (() => {
     );
   }
 
+  function isScheduleCancelled(scheduleId, dateKey) {
+    return data.scheduleCancellations.some(
+      (c) => c.scheduleId === scheduleId && c.date === dateKey
+    );
+  }
+
+  function getActiveSchedulesForDate(dateKey) {
+    return ScheduleLogic.getSchedulesForDate(data.schedules, dateKey, data.scheduleCancellations);
+  }
+
+  function scheduleItemHtml(s, dateKey, { extraClass = '' } = {}) {
+    const done = isScheduleCompleted(s.id, dateKey);
+    const purpose = s.purpose
+      ? `<span class="cal-schedule-purpose">目的：${escapeHtml(s.purpose)}</span>`
+      : '';
+    const notes = s.notes
+      ? `<span class="cal-schedule-notes">备注：${escapeHtml(s.notes)}</span>`
+      : '';
+    const className = extraClass ? `cal-schedule-item ${extraClass}` : 'cal-schedule-item';
+    return `<div class="${className}" style="--schedule-color:${escapeHtml(s.color || SCHEDULE_COLORS[0])}">
+      <div class="cal-schedule-item-main">
+        <label class="checkbox-label">
+          <input type="checkbox" data-sid="${s.id}" ${done ? 'checked' : ''} />
+          ${escapeHtml(s.title)}
+        </label>
+        ${purpose}${notes}
+      </div>
+      <button type="button" class="btn-secondary btn-schedule-cancel" data-sid="${s.id}" title="仅取消本次">取消</button>
+    </div>`;
+  }
+
+  function bindScheduleItemActions(container, dateKey, { onToggle } = {}) {
+    container.querySelectorAll('input[type=checkbox][data-sid]').forEach((cb) => {
+      cb.addEventListener('change', async () => {
+        await toggleScheduleComplete(cb.dataset.sid, dateKey, cb.checked);
+        onToggle?.();
+      });
+    });
+    container.querySelectorAll('.btn-schedule-cancel').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await cancelScheduleOccurrence(btn.dataset.sid, dateKey);
+      });
+    });
+  }
+
   /** 固定日程：打勾=已完成，未打勾=计划；不属于任何项目；非琐碎任务 */
   function filterSchedulesForTimeline(dateKey, ctx) {
     if (!ctx.showSchedules || ctx.typeFilter === 'doing' || ctx.typeFilter === 'waiting') return [];
-    let schedules = ScheduleLogic.getSchedulesForDate(data.schedules, dateKey);
+    let schedules = getActiveSchedulesForDate(dateKey);
     if (ctx.typeFilter === 'done') {
       schedules = schedules.filter((s) => isScheduleCompleted(s.id, dateKey));
     } else if (ctx.typeFilter === 'plan') {
@@ -1833,28 +1880,17 @@ const App = (() => {
     block.innerHTML = '<h4 class="timeline-schedules-title">固定日程</h4>';
 
     schedules.forEach((s) => {
-      const done = isScheduleCompleted(s.id, dateKey);
       const item = document.createElement('div');
-      item.className = 'timeline-schedule-item cal-schedule-item';
-      item.style.setProperty('--schedule-color', s.color || SCHEDULE_COLORS[0]);
-      item.innerHTML = `
-        <label class="checkbox-label">
-          <input type="checkbox" data-sid="${s.id}" ${done ? 'checked' : ''} />
-          ${escapeHtml(s.title)}
-        </label>
-        ${s.purpose ? `<span class="cal-schedule-purpose">目的：${escapeHtml(s.purpose)}</span>` : ''}
-        ${s.notes ? `<span class="cal-schedule-notes">备注：${escapeHtml(s.notes)}</span>` : ''}
-      `;
-      block.appendChild(item);
+      item.innerHTML = scheduleItemHtml(s, dateKey, { extraClass: 'timeline-schedule-item' });
+      block.appendChild(item.firstElementChild);
     });
 
     body.appendChild(block);
 
-    block.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-      cb.addEventListener('change', async () => {
-        await toggleScheduleComplete(cb.dataset.sid, dateKey, cb.checked);
+    bindScheduleItemActions(block, dateKey, {
+      onToggle: () => {
         if (currentView === 'timeline') renderTimeline();
-      });
+      },
     });
   }
 
@@ -2444,7 +2480,8 @@ const App = (() => {
           dateKey,
           summaryLogs,
           data.schedules,
-          data.scheduleCompletions
+          data.scheduleCompletions,
+          data.scheduleCancellations
         );
       }
     } else {
@@ -2460,7 +2497,8 @@ const App = (() => {
           rangeEnd,
           summaryLogs,
           data.schedules,
-          data.scheduleCompletions
+          data.scheduleCompletions,
+          data.scheduleCancellations
         );
       }
     }
@@ -2498,7 +2536,7 @@ const App = (() => {
         (DateUtils.isToday(date) ? ' today' : '') +
         (dateKey === calSelectedDate ? ' selected' : '');
 
-      const schedules = ScheduleLogic.getSchedulesForDate(data.schedules, dateKey);
+      const schedules = getActiveSchedulesForDate(dateKey);
       const dotsHtml = schedules
         .map(
           (s) =>
@@ -2541,37 +2579,13 @@ const App = (() => {
     const d = DateUtils.parseDateKey(dateKey);
     $('#cal-detail-date').textContent = DateUtils.formatCN(d);
 
-    const schedules = ScheduleLogic.getSchedulesForDate(data.schedules, dateKey);
+    const schedules = getActiveSchedulesForDate(dateKey);
     const schEl = $('#cal-schedules');
     if (!schedules.length) {
       schEl.innerHTML = '<p class="hint">当日无固定日程</p>';
     } else {
-      schEl.innerHTML =
-        '<h4>固定日程</h4>' +
-        schedules
-          .map((s) => {
-            const done = data.scheduleCompletions.some(
-              (c) => c.scheduleId === s.id && c.date === dateKey && c.completed
-            );
-            const purpose = s.purpose
-              ? `<span class="cal-schedule-purpose">目的：${escapeHtml(s.purpose)}</span>`
-              : '';
-            const notes = s.notes
-              ? `<span class="cal-schedule-notes">备注：${escapeHtml(s.notes)}</span>`
-              : '';
-            return `<div class="cal-schedule-item" style="--schedule-color:${escapeHtml(s.color || SCHEDULE_COLORS[0])}">
-              <label class="checkbox-label">
-              <input type="checkbox" data-sid="${s.id}" ${done ? 'checked' : ''} />
-              ${escapeHtml(s.title)}
-            </label>${purpose}${notes}</div>`;
-          })
-          .join('');
-
-      schEl.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-        cb.addEventListener('change', async () => {
-          await toggleScheduleComplete(cb.dataset.sid, dateKey, cb.checked);
-        });
-      });
+      schEl.innerHTML = '<h4>固定日程</h4>' + schedules.map((s) => scheduleItemHtml(s, dateKey)).join('');
+      bindScheduleItemActions(schEl, dateKey);
     }
 
     const dayLogs = data.logs.filter((l) => l.date === dateKey && l.type !== 'far');
@@ -2599,6 +2613,20 @@ const App = (() => {
       data.scheduleCompletions.push({ scheduleId, date: dateKey, completed: true });
     }
     await persist();
+  }
+
+  async function cancelScheduleOccurrence(scheduleId, dateKey) {
+    const sch = data.schedules.find((s) => s.id === scheduleId);
+    if (!sch || isScheduleCancelled(scheduleId, dateKey)) return;
+    const dateLabel = DateUtils.formatCN(DateUtils.parseDateKey(dateKey));
+    if (!confirm(`确定取消 ${dateLabel} 的「${sch.title}」？\n仅取消本次，不影响后续重复日程。`)) return;
+    data.scheduleCompletions = data.scheduleCompletions.filter(
+      (c) => !(c.scheduleId === scheduleId && c.date === dateKey)
+    );
+    data.scheduleCancellations.push({ scheduleId, date: dateKey });
+    await persist();
+    if (currentView === 'calendar') renderCalendar();
+    if (currentView === 'timeline') renderTimeline();
   }
 
   function recurrenceLabel(s) {
@@ -3199,6 +3227,7 @@ const App = (() => {
     if (!confirm('确定删除该固定日程？')) return;
     data.schedules = data.schedules.filter((s) => s.id !== id);
     data.scheduleCompletions = data.scheduleCompletions.filter((c) => c.scheduleId !== id);
+    data.scheduleCancellations = data.scheduleCancellations.filter((c) => c.scheduleId !== id);
     await persist();
     renderScheduleList();
     if (currentView === 'calendar') renderCalendar();

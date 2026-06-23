@@ -2934,12 +2934,20 @@ body:has(#app:not(.hidden)) {
     var(--apple-shadow-lg);
 }
 
-#entry-dialog .entry-dialog-body {
+#entry-dialog .entry-dialog-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: inherit;
-  padding: calc(32px * var(--ui-scale)) calc(36px * var(--ui-scale));
+  overflow: hidden;
+}
+
+#entry-dialog .entry-dialog-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: calc(20px * var(--ui-scale)) calc(36px * var(--ui-scale)) calc(32px * var(--ui-scale));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2949,8 +2957,10 @@ body:has(#app:not(.hidden)) {
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--ui-scale));
-  margin-bottom: calc(20px * var(--ui-scale));
   flex-shrink: 0;
+  padding: calc(32px * var(--ui-scale)) calc(36px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border-bottom: 1px solid var(--apple-border);
+  background: var(--apple-surface);
 }
 
 #entry-dialog .entry-dialog-header h3 {

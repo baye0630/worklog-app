@@ -996,6 +996,7 @@ const App = (() => {
       renderSummary();
     });
     $('#btn-move-past-plans-today').addEventListener('click', movePastPlansToToday);
+    $('#btn-move-past-doing-today').addEventListener('click', movePastDoingToToday);
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -1567,6 +1568,30 @@ const App = (() => {
     renderAll();
     if (currentView === 'timeline') scrollTimelineToToday(false);
     alert(`已将 ${count} 条计划任务移至今天`);
+  }
+
+  async function movePastDoingToToday() {
+    const today = DateUtils.toDateKey(new Date());
+    const pastDoing = data.logs.filter((l) => l.type === 'doing' && l.date < today);
+    if (!pastDoing.length) {
+      alert('没有需要移动的历史进行中任务');
+      return;
+    }
+    const count = pastDoing.length;
+    if (!confirm(`确定将 ${count} 条历史进行中任务移至今天？`)) return;
+
+    const baseTs = Date.now();
+    pastDoing
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .forEach((log, i) => {
+        log.date = today;
+        log.timestamp = baseTs - i;
+      });
+
+    await persist();
+    renderAll();
+    if (currentView === 'timeline') scrollTimelineToToday(false);
+    alert(`已将 ${count} 条进行中任务移至今天`);
   }
 
   async function addLog() {

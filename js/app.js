@@ -2266,6 +2266,11 @@ const App = (() => {
     }
     li.querySelector('.btn-edit').addEventListener('click', () => openEditDialog(log));
     li.querySelector('.btn-delete').addEventListener('click', () => deleteLog(log.id));
+    li.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.type-badge, .log-link, .attachments-block, .log-actions, a, button, input, label')) return;
+      e.preventDefault();
+      openEditDialog(log);
+    });
     return li;
   }
 

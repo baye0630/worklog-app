@@ -387,6 +387,16 @@
         </div>
 
         <div class="settings-block">
+          <h3>任务整理</h3>
+          <p class="hint">将今天之前的「计划」或「进行中」任务移至今天时间线，便于集中处理遗留待办。</p>
+          <div class="task-cleanup-actions">
+            <button type="button" id="btn-move-past-plans-today" class="btn-secondary">往日计划</button>
+            <button type="button" id="btn-move-past-doing-today" class="btn-secondary">往日进行中</button>
+            <button type="button" id="btn-move-past-active-today" class="btn-secondary">计划 + 进行中</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
           <h3>项目标签</h3>
           <p class="hint">用于快速录入与时间线筛选，需自行添加；初始无默认标签。删除后已有记录仍保留原标签。</p>
           <ul id="project-tag-list" class="project-tag-list"></ul>
@@ -421,14 +431,6 @@
             <ul id="entry-field-order-list" class="entry-field-order-list"></ul>
             <button type="button" id="btn-reset-entry-field-order" class="btn-secondary">恢复默认顺序</button>
           </div>
-        </div>
-
-        <div class="settings-block">
-          <h3>任务整理</h3>
-          <p class="hint">将今天之前所有「计划」状态的任务移至今天时间线，便于集中处理遗留待办。</p>
-          <button type="button" id="btn-move-past-plans-today" class="btn-secondary">一键将往日计划移至今天</button>
-          <p class="hint">将今天之前所有「进行中」状态的任务移至今天时间线，便于继续跟进当前任务。</p>
-          <button type="button" id="btn-move-past-doing-today" class="btn-secondary">一键将往日进行中移至今天</button>
         </div>
 
         <div class="settings-block">

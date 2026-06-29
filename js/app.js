@@ -995,8 +995,9 @@ const App = (() => {
       renderTimeline();
       renderSummary();
     });
-    $('#btn-move-past-plans-today').addEventListener('click', movePastPlansToToday);
-    $('#btn-move-past-doing-today').addEventListener('click', movePastDoingToToday);
+    $('#btn-move-past-plans-today').addEventListener('click', () => movePastTasksToToday(['plan']));
+    $('#btn-move-past-doing-today').addEventListener('click', () => movePastTasksToToday(['doing']));
+    $('#btn-move-past-active-today').addEventListener('click', () => movePastTasksToToday(['plan', 'doing']));
 
     $('#timeline-view-toggle').addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-timeline-view]');
@@ -1546,42 +1547,29 @@ const App = (() => {
     return `<span class="log-deadline${overdue ? ' overdue' : ''}">· ${escapeHtml(formatDeadlineLabel(log.deadline))}${overdue ? ' 已逾期' : ''}</span>`;
   }
 
-  async function movePastPlansToToday() {
-    const today = DateUtils.toDateKey(new Date());
-    const pastPlans = data.logs.filter((l) => l.type === 'plan' && l.date < today);
-    if (!pastPlans.length) {
-      alert('没有需要移动的历史计划任务');
-      return;
-    }
-    const count = pastPlans.length;
-    if (!confirm(`确定将 ${count} 条历史计划任务移至今天？`)) return;
+  const MOVE_TO_TODAY_TYPE_LABELS = {
+    plan: '计划',
+    doing: '进行中',
+  };
 
-    const baseTs = Date.now();
-    pastPlans
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .forEach((log, i) => {
-        log.date = today;
-        log.timestamp = baseTs - i;
-      });
-
-    await persist();
-    renderAll();
-    if (currentView === 'timeline') scrollTimelineToToday(false);
-    alert(`已将 ${count} 条计划任务移至今天`);
+  function formatMoveToTodayTypeLabel(types) {
+    return types.map((type) => MOVE_TO_TODAY_TYPE_LABELS[type] || type).join('和');
   }
 
-  async function movePastDoingToToday() {
+  async function movePastTasksToToday(types) {
     const today = DateUtils.toDateKey(new Date());
-    const pastDoing = data.logs.filter((l) => l.type === 'doing' && l.date < today);
-    if (!pastDoing.length) {
-      alert('没有需要移动的历史进行中任务');
+    const typeSet = new Set(types);
+    const typeLabel = formatMoveToTodayTypeLabel(types);
+    const pastTasks = data.logs.filter((l) => typeSet.has(l.type) && l.date < today);
+    if (!pastTasks.length) {
+      alert(`没有需要移动的历史${typeLabel}任务`);
       return;
     }
-    const count = pastDoing.length;
-    if (!confirm(`确定将 ${count} 条历史进行中任务移至今天？`)) return;
+    const count = pastTasks.length;
+    if (!confirm(`确定将 ${count} 条历史${typeLabel}任务移至今天？`)) return;
 
     const baseTs = Date.now();
-    pastDoing
+    pastTasks
       .sort((a, b) => b.timestamp - a.timestamp)
       .forEach((log, i) => {
         log.date = today;
@@ -1591,7 +1579,7 @@ const App = (() => {
     await persist();
     renderAll();
     if (currentView === 'timeline') scrollTimelineToToday(false);
-    alert(`已将 ${count} 条进行中任务移至今天`);
+    alert(`已将 ${count} 条${typeLabel}任务移至今天`);
   }
 
   async function addLog() {

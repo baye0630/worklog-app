@@ -2641,6 +2641,18 @@ body:has(#app:not(.hidden)) {
   font-size: var(--fs-sm);
 }
 
+.task-cleanup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(10px * var(--ui-scale));
+  margin-top: calc(12px * var(--ui-scale));
+}
+
+.task-cleanup-actions .btn-secondary {
+  padding: calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  font-size: var(--fs-sm);
+}
+
 .project-tag-add {
   display: flex;
   flex-wrap: wrap;

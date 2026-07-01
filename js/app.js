@@ -2357,6 +2357,7 @@ const App = (() => {
   async function revertPlanToFarLog(id) {
     const log = data.logs.find((l) => l.id === id);
     if (!log || log.type !== 'plan') return;
+    if (!confirm('确定将这条计划移至「遥远计划」？\n它将从时间线中隐藏，可在「遥远计划」页面查看。')) return;
     log.type = 'far';
     await persist();
     refreshAfterLogChange();

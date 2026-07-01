@@ -55,6 +55,7 @@ const App = (() => {
     schedules: [],
     scheduleCompletions: [],
     scheduleCancellations: [],
+    overtimes: [],
     meetings: [],
     keyProjects: [],
     dailySummaries: {},
@@ -159,6 +160,7 @@ const App = (() => {
     data.schedules = data.schedules || [];
     data.scheduleCompletions = data.scheduleCompletions || [];
     data.scheduleCancellations = data.scheduleCancellations || [];
+    data.overtimes = data.overtimes || [];
     data.meetings = data.meetings || [];
     data.keyProjects = data.keyProjects || [];
     migrateKeyProjectIds();
@@ -2521,6 +2523,39 @@ const App = (() => {
     downloadFile(name, text, 'text/markdown');
   }
 
+  function getOvertime(dateKey) {
+    return (data.overtimes || []).find((o) => o.date === dateKey) || null;
+  }
+
+  const OVERTIME_MAX_HOURS = 6;
+  // 冷 → 暖 渐变：短时长偏冷色（蓝/青），长时长偏暖色（橙/红）
+  const OVERTIME_COLOR_STOPS = [
+    [80, 160, 255],   // 0h  冷蓝
+    [90, 200, 170],   // ~2h 青绿
+    [255, 190, 70],   // ~4h 暖橙
+    [230, 70, 60],    // 6h+ 暖红
+  ];
+  function overtimeColor(hours) {
+    const ratio = Math.min(Math.max(hours / OVERTIME_MAX_HOURS, 0), 1);
+    const stops = OVERTIME_COLOR_STOPS;
+    const segs = stops.length - 1;
+    const pos = ratio * segs;
+    const i = Math.min(Math.floor(pos), segs - 1);
+    const t = pos - i;
+    const a = stops[i];
+    const b = stops[i + 1];
+    return [
+      Math.round(a[0] + (b[0] - a[0]) * t),
+      Math.round(a[1] + (b[1] - a[1]) * t),
+      Math.round(a[2] + (b[2] - a[2]) * t),
+    ];
+  }
+  function overtimeBgStyle(hours) {
+    if (!hours || hours <= 0) return '';
+    const [r, g, b] = overtimeColor(hours);
+    return `rgba(${r}, ${g}, ${b}, 0.62)`;
+  }
+
   function renderCalendar() {
     $('#cal-title').textContent = `${calYear}年${calMonth + 1}月`;
     const grid = $('#cal-grid');
@@ -2537,6 +2572,16 @@ const App = (() => {
         (DateUtils.isToday(date) ? ' today' : '') +
         (dateKey === calSelectedDate ? ' selected' : '');
 
+      const ot = getOvertime(dateKey);
+      const otHours = ot ? ot.hours : 0;
+      if (otHours > 0) {
+        cell.classList.add('has-overtime');
+        const [cr, cg, cb] = overtimeColor(otHours);
+        cell.style.setProperty('--cal-ot-bg', `rgba(${cr}, ${cg}, ${cb}, 0.62)`);
+        cell.style.setProperty('--cal-ot-badge-bg', `rgb(${cr}, ${cg}, ${cb})`);
+        if (otHours >= OVERTIME_MAX_HOURS) cell.classList.add('ot-max');
+      }
+
       const schedules = getActiveSchedulesForDate(dateKey);
       const dotsHtml = schedules
         .map(
@@ -2544,9 +2589,13 @@ const App = (() => {
             `<span class="cal-dot" style="background:${escapeHtml(s.color || SCHEDULE_COLORS[0])}" title="${escapeHtml(s.title)}"></span>`
         )
         .join('');
+      const otHtml = otHours > 0
+        ? `<div class="cal-ot-badge" title="加班 ${otHours} 小时">OT ${otHours}h</div>`
+        : '';
       cell.innerHTML = `
         <div class="cal-day-num">${date.getDate()}</div>
         <div class="cal-dots">${dotsHtml}</div>
+        ${otHtml}
       `;
       cell.addEventListener('click', () => {
         calSelectedDate = dateKey;
@@ -2562,18 +2611,18 @@ const App = (() => {
 
   function renderCalendarLegend() {
     const el = $('#cal-legend');
-    if (!data.schedules.length) {
-      el.classList.add('hidden');
-      el.innerHTML = '';
-      return;
-    }
+    const scheduleHtml = data.schedules.length
+      ? data.schedules
+          .map(
+            (s) =>
+              `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${escapeHtml(s.color || SCHEDULE_COLORS[0])}"></span>${escapeHtml(s.title)}</span>`
+          )
+          .join('')
+      : '';
+    const otHtml =
+      '<span class="cal-ot-legend"><span class="cal-ot-legend-bar"></span>加班时长（越暖越久）</span>';
+    el.innerHTML = scheduleHtml + otHtml;
     el.classList.remove('hidden');
-    el.innerHTML = data.schedules
-      .map(
-        (s) =>
-          `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${escapeHtml(s.color || SCHEDULE_COLORS[0])}"></span>${escapeHtml(s.title)}</span>`
-      )
-      .join('');
   }
 
   function renderCalDetail(dateKey) {
@@ -2588,6 +2637,8 @@ const App = (() => {
       schEl.innerHTML = '<h4>固定日程</h4>' + schedules.map((s) => scheduleItemHtml(s, dateKey)).join('');
       bindScheduleItemActions(schEl, dateKey);
     }
+
+    renderCalOvertime(dateKey);
 
     const dayLogs = data.logs.filter((l) => l.date === dateKey && l.type !== 'far');
     const logEl = $('#cal-day-logs');
@@ -2604,6 +2655,115 @@ const App = (() => {
           )
           .join('');
     }
+  }
+
+  function calcOvertimeHours(start, end) {
+    if (!start || !end) return null;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if (isNaN(sh) || isNaN(eh)) return null;
+    let mins = eh * 60 + em - (sh * 60 + sm);
+    if (mins <= 0) mins += 24 * 60; // 跨夜，例如 23:00 - 01:00
+    return Math.round((mins / 60) * 2) / 2; // 0.5 小时步进
+  }
+
+  function renderCalOvertime(dateKey) {
+    const wrap = $('#cal-overtime');
+    if (!wrap) return;
+    const ot = getOvertime(dateKey);
+    const isOt = !!ot && ot.hours > 0;
+    const hours = ot ? ot.hours || '' : '';
+    const note = ot ? ot.note || '' : '';
+    const start = (ot && ot.start) || '20:00';
+    const end = (ot && ot.end) || '22:00';
+    wrap.innerHTML = `
+      <h4>加班记录</h4>
+      <div class="cal-ot-form">
+        <label class="checkbox-label">
+          <input type="checkbox" id="ot-checked" ${isOt ? 'checked' : ''} /> 当天加班
+        </label>
+        <div class="cal-ot-fields ${isOt ? '' : 'hidden'}" id="ot-fields">
+          <div class="cal-ot-period">
+            <label class="cal-ot-time-label">
+              开始
+              <input type="time" id="ot-start" value="${escapeHtml(start)}" />
+            </label>
+            <span class="cal-ot-time-sep">~</span>
+            <label class="cal-ot-time-label">
+              结束
+              <input type="time" id="ot-end" value="${escapeHtml(end)}" />
+            </label>
+          </div>
+          <label class="cal-ot-hours-label">
+            加班时长（小时）
+            <input type="number" id="ot-hours" min="0.5" step="0.5" value="${hours}" inputmode="decimal" />
+          </label>
+          <label class="cal-ot-note-label">
+            备注
+            <input type="text" id="ot-note" value="${escapeHtml(note)}" placeholder="可选" />
+          </label>
+          <div class="cal-ot-actions">
+            <button type="button" id="ot-save" class="btn-secondary">${ot ? '保存修改' : '保存加班'}</button>
+            ${ot ? '<button type="button" id="ot-delete" class="btn-danger-soft">删除加班</button>' : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    const checked = $('#ot-checked');
+    const fields = $('#ot-fields');
+    const hoursInput = $('#ot-hours');
+    const startInput = $('#ot-start');
+    const endInput = $('#ot-end');
+
+    const syncHours = () => {
+      const h = calcOvertimeHours(startInput.value, endInput.value);
+      if (h != null) hoursInput.value = h;
+    };
+    startInput.addEventListener('change', syncHours);
+    endInput.addEventListener('change', syncHours);
+
+    checked.addEventListener('change', () => {
+      if (checked.checked) {
+        fields.classList.remove('hidden');
+        if (!hoursInput.value) syncHours();
+        startInput.focus();
+      } else {
+        fields.classList.add('hidden');
+      }
+    });
+    $('#ot-save').addEventListener('click', () => saveOvertime(dateKey));
+    const delBtn = $('#ot-delete');
+    if (delBtn) delBtn.addEventListener('click', () => deleteOvertime(dateKey));
+  }
+
+  async function deleteOvertime(dateKey) {
+    if (!getOvertime(dateKey)) return;
+    const dateLabel = DateUtils.formatCN(DateUtils.parseDateKey(dateKey));
+    if (!confirm(`确定删除 ${dateLabel} 的加班记录？`)) return;
+    data.overtimes = (data.overtimes || []).filter((o) => o.date !== dateKey);
+    await persist();
+    renderCalendar();
+    renderCalOvertime(dateKey);
+  }
+
+  async function saveOvertime(dateKey) {
+    const checked = $('#ot-checked').checked;
+    const hoursRaw = $('#ot-hours').value.trim();
+    const note = $('#ot-note').value.trim();
+    const start = $('#ot-start').value || '20:00';
+    const end = $('#ot-end').value || '22:00';
+    data.overtimes = (data.overtimes || []).filter((o) => o.date !== dateKey);
+    if (checked) {
+      const hours = parseFloat(hoursRaw);
+      if (!hoursRaw || isNaN(hours) || hours <= 0) {
+        alert('请填写有效的加班时长（小时）');
+        return;
+      }
+      data.overtimes.push({ date: dateKey, hours, note, start, end });
+    }
+    await persist();
+    renderCalendar();
+    renderCalOvertime(dateKey);
   }
 
   async function toggleScheduleComplete(scheduleId, dateKey, completed) {
